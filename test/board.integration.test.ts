@@ -148,7 +148,7 @@ describe.skipIf(!hasDb)("quadro (integração)", () => {
     });
 
     it("avisa mudanças do quadro por NOTIFY", async () => {
-      const listener = new Client({ connectionString: process.env.DIRECT_URL ?? process.env.DATABASE_URL });
+      const listener = new Client({ connectionString: process.env.DIRECT_URL ?? process.env.DATABASE_URL_UNPOOLED ?? process.env.DATABASE_URL });
       await listener.connect();
       try {
         await listener.query("LISTEN plantao_board");
