@@ -8,7 +8,11 @@ import { db } from "@/lib/db";
 import { PriorityBadge, StatusBadge, formatDateTime } from "@/components/tickets/badges";
 import { TicketThread } from "@/components/tickets/thread";
 import { ActionForm } from "@/components/tickets/action-form";
-import { changeFields, changeStatus, reply } from "../actions";
+import { AiPanel } from "@/components/tickets/ai-panel";
+import { usdToBrl } from "@/lib/ai/pricing";
+import {
+  acceptAssigneeAction, changeFields, changeStatus, discardDraftAction, reply, requestDraftAction, sendDraftAction, undoTriageAction,
+} from "../actions";
 
 export const metadata = { title: "Chamado" };
 
@@ -19,7 +23,14 @@ export default async function StaffTicketPage({ params }: PageProps<"/chamados/[
     if (err instanceof NotFoundError) notFound();
     throw err;
   });
-  const team = await db.team.findUniqueOrThrow({ where: { id: user.teamId }, select: { categories: true } });
+  const [team, draft, triageAction, research, cost] = await Promise.all([
+    db.team.findUniqueOrThrow({ where: { id: user.teamId }, select: { categories: true } }),
+    db.replyDraft.findFirst({ where: { ticketId: ticket.id, status: "PENDING" }, orderBy: { createdAt: "desc" } }),
+    ticket.triagedByAgent ? db.action.findFirst({ where: { targetId: ticket.id, type: "triage.apply" }, orderBy: { createdAt: "desc" } }) : null,
+    db.agent.findUnique({ where: { teamId_type: { teamId: user.teamId, type: "RESEARCH" } }, select: { active: true, pausedReason: true } }),
+    db.aiUsage.aggregate({ where: { ticketId: ticket.id }, _sum: { costMicroUsd: true } }),
+  ]);
+  const triageReason = (triageAction?.payload as { to?: { reason?: string } } | null)?.to?.reason ?? null;
   const canEdit = can(user.role, "card:edit");
   const canPrioritize = can(user.role, "card:prioritize");
 
@@ -38,6 +49,20 @@ export default async function StaffTicketPage({ params }: PageProps<"/chamados/[
         </header>
 
         <TicketThread messages={ticket.messages} requesterId={ticket.requesterId} />
+
+        <AiPanel
+          triage={ticket.triagedByAgent ? { reason: triageReason, suggestedAssignee: ticket.suggestedAssignee, currentAssigneeId: ticket.card?.assignee?.id ?? null } : null}
+          draft={draft ? { id: draft.id, content: draft.content, createdAt: draft.createdAt, sources: draft.sources as never } : null}
+          researchActive={Boolean(research?.active && !research.pausedReason)}
+          costBrl={usdToBrl(cost._sum.costMicroUsd ?? 0)}
+          canEdit={canEdit}
+          canAssign={can(user.role, "card:assign")}
+          undo={undoTriageAction.bind(null, ticket.id)}
+          accept={acceptAssigneeAction.bind(null, ticket.id)}
+          request={requestDraftAction.bind(null, ticket.id)}
+          send={draft ? sendDraftAction.bind(null, draft.id) : undefined}
+          discard={draft ? discardDraftAction.bind(null, draft.id) : undefined}
+        />
 
         {canEdit && (
           <ActionForm action={reply.bind(null, ticket.id)} className="space-y-2">
