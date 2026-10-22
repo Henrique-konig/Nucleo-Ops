@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { ConfigError, missingConfig } from "@/components/config-check";
 import { needsSetup, runSetup, setupTokenRequired } from "@/lib/setup";
 import { errorMessage } from "@/lib/error-message";
 
@@ -23,6 +24,8 @@ async function setup(formData: FormData) {
 }
 
 export default async function SetupPage({ searchParams }: PageProps<"/setup">) {
+  const missing = missingConfig();
+  if (missing.length > 0) return <ConfigError missing={missing} />;
   if (!(await needsSetup())) redirect("/login");
   const { erro } = await searchParams;
 
