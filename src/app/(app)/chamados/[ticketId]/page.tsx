@@ -10,6 +10,10 @@ import { TicketThread } from "@/components/tickets/thread";
 import { ActionForm } from "@/components/tickets/action-form";
 import { AiPanel } from "@/components/tickets/ai-panel";
 import { usdToBrl } from "@/lib/ai/pricing";
+import { executionCatalog, listExecutions } from "@/lib/execution/service";
+import { ExecutionList } from "@/components/execution/execution-list";
+import { ProposeExecutionForm } from "@/components/execution/propose-form";
+import { proposeExecutionAction, suggestExecutionAction } from "../../execucoes/actions";
 import {
   acceptAssigneeAction, changeFields, changeStatus, discardDraftAction, reply, requestDraftAction, sendDraftAction, undoTriageAction,
 } from "../actions";
@@ -30,6 +34,14 @@ export default async function StaffTicketPage({ params }: PageProps<"/chamados/[
     db.agent.findUnique({ where: { teamId_type: { teamId: user.teamId, type: "RESEARCH" } }, select: { active: true, pausedReason: true } }),
     db.aiUsage.aggregate({ where: { ticketId: ticket.id }, _sum: { costMicroUsd: true } }),
   ]);
+  const canExecute = can(user.role, "execution:propose");
+  const [catalog, executionAgent, executions] = canExecute
+    ? await Promise.all([
+        executionCatalog(user.teamId),
+        db.agent.findUnique({ where: { teamId_type: { teamId: user.teamId, type: "EXECUTION" } }, select: { active: true, pausedReason: true } }),
+        listExecutions(user).then((rows) => rows.filter((r) => r.ticket?.id === ticket.id)),
+      ])
+    : [[], null, []];
   const triageReason = (triageAction?.payload as { to?: { reason?: string } } | null)?.to?.reason ?? null;
   const canEdit = can(user.role, "card:edit");
   const canPrioritize = can(user.role, "card:prioritize");
@@ -125,6 +137,20 @@ export default async function StaffTicketPage({ params }: PageProps<"/chamados/[
             </label>
             <button className="btn">Salvar</button>
           </ActionForm>
+        )}
+        {canExecute && catalog.length > 0 && (
+          <section aria-labelledby="exec-title" className="space-y-3 rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+            <h2 id="exec-title" className="text-sm font-semibold">Ações pré-aprovadas</h2>
+            {executions.length > 0 && (
+              <ExecutionList rows={executions} canDecide={can(user.role, "execution:approve")} canDecideSensitive={can(user.role, "execution:approve_sensitive")} currentUserId={user.id} />
+            )}
+            {executionAgent?.active && !executionAgent.pausedReason && (
+              <ActionForm action={suggestExecutionAction.bind(null, ticket.id)} resetOnSuccess={false} successMessage="O agente vai analisar o chamado.">
+                <button className="btn w-full">Pedir sugestão ao agente</button>
+              </ActionForm>
+            )}
+            <ProposeExecutionForm catalog={catalog} action={proposeExecutionAction.bind(null, ticket.id)} />
+          </section>
         )}
       </aside>
     </main>

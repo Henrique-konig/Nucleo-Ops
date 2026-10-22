@@ -80,7 +80,15 @@ async function main() {
     await db.agent.upsert({
       where: { teamId_type: { teamId: team.id, type: agent.type } },
       update: {},
-      create: { teamId: team.id, ...agent, permissions: { allowedActions: [], perMinute: 30, perDay: 2000 } },
+      create: {
+        teamId: team.id,
+        ...agent,
+        permissions: {
+          allowedActions: agent.type === "EXECUTION" ? ["reset_password", "unlock_account", "add_to_group"] : [],
+          perMinute: 30,
+          perDay: 2000,
+        },
+      },
     });
   }
 

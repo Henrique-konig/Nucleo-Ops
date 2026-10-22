@@ -96,6 +96,7 @@ enum IntegrationType {
   GITLAB
   GOOGLE_CALENDAR
   WEBHOOK
+  AUTOMATION // executor das ações pré-aprovadas (n8n, Rundeck, AWX...)
 }
 
 model Team {
