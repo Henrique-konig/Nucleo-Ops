@@ -1,11 +1,13 @@
 import Link from "next/link";
-import { ArrowLeft, Send } from "lucide-react";
+import { ArrowLeft, History, Send } from "lucide-react";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/session";
 import { can } from "@/lib/permissions";
 import { CHANNEL_LABELS, getTicketForStaff, PRIORITY_LABELS, STATUS_LABELS } from "@/lib/tickets";
 import { NotFoundError } from "@/lib/errors";
 import { db } from "@/lib/db";
+import { ticketActivity } from "@/lib/collaboration";
+import { ActivityFeed } from "@/components/activity/activity-feed";
 import { PriorityBadge, StatusBadge, formatDateTime } from "@/components/tickets/badges";
 import { TicketThread } from "@/components/tickets/thread";
 import { ActionForm } from "@/components/tickets/action-form";
@@ -28,12 +30,13 @@ export default async function StaffTicketPage({ params }: PageProps<"/chamados/[
     if (err instanceof NotFoundError) notFound();
     throw err;
   });
-  const [team, draft, triageAction, research, cost] = await Promise.all([
+  const [team, draft, triageAction, research, cost, activity] = await Promise.all([
     db.team.findUniqueOrThrow({ where: { id: user.teamId }, select: { categories: true } }),
     db.replyDraft.findFirst({ where: { ticketId: ticket.id, status: "PENDING" }, orderBy: { createdAt: "desc" } }),
     ticket.triagedByAgent ? db.action.findFirst({ where: { targetId: ticket.id, type: "triage.apply" }, orderBy: { createdAt: "desc" } }) : null,
     db.agent.findUnique({ where: { teamId_type: { teamId: user.teamId, type: "RESEARCH" } }, select: { active: true, pausedReason: true } }),
     db.aiUsage.aggregate({ where: { ticketId: ticket.id }, _sum: { costMicroUsd: true } }),
+    ticketActivity(user, ticket.id),
   ]);
   const canExecute = can(user.role, "execution:propose");
   const [catalog, executionAgent, executions] = canExecute
@@ -94,6 +97,14 @@ export default async function StaffTicketPage({ params }: PageProps<"/chamados/[
             </div>
           </ActionForm>
         )}
+
+        <section aria-labelledby="activity-title" className="panel space-y-4 p-5">
+          <div className="flex items-baseline justify-between gap-2">
+            <h2 id="activity-title" className="section-title flex items-center gap-2"><History className="size-4 text-slate-400" aria-hidden /> Atividade</h2>
+            {ticket.card && <Link href={`/boards/${ticket.card.boardId}?cartao=${ticket.card.id}`} className="link text-sm">Comentar no cartão</Link>}
+          </div>
+          <ActivityFeed items={activity} />
+        </section>
       </div>
 
       <aside className="space-y-4 lg:sticky lg:top-8 lg:self-start">

@@ -10,6 +10,7 @@ import {
 import type { NavGroup } from "@/lib/nav";
 import { initials } from "@/lib/initials";
 import { OPEN_PALETTE_EVENT } from "./command-palette";
+import { NotificationBell } from "./notification-bell";
 
 type Item = { href: string; label: string; group: NavGroup };
 
@@ -47,6 +48,16 @@ export function Sidebar({ items, user, signOut }: Props) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  // Um só sino montado por vez (uma conexão de tempo real), conforme a largura da tela.
+  const [isDesktop, setIsDesktop] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const query = window.matchMedia("(min-width: 1024px)");
+    const update = () => setIsDesktop(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
 
   useEffect(() => {
     try {
@@ -148,6 +159,7 @@ export function Sidebar({ items, user, signOut }: Props) {
       <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-slate-200/80 bg-slate-50/80 px-4 backdrop-blur-xl lg:hidden dark:border-slate-800 dark:bg-slate-950/80">
         <Link href="/" aria-label="Início"><Logo /></Link>
         <span className="flex items-center gap-1">
+        {isDesktop === false && <NotificationBell align="right" />}
         <button className="icon-btn" aria-label="Buscar" onClick={() => window.dispatchEvent(new Event(OPEN_PALETTE_EVENT))}>
           <Search className="size-5" aria-hidden />
         </button>
@@ -176,22 +188,28 @@ export function Sidebar({ items, user, signOut }: Props) {
 
       {/* Barra lateral no computador */}
       <aside
-        className={`sticky top-0 hidden h-screen shrink-0 flex-col border-r border-slate-200/80 bg-slate-100/60 transition-[width] duration-300 ease-out lg:flex dark:border-slate-800/80 dark:bg-slate-950 ${
+        className={`sticky top-0 z-40 hidden h-screen shrink-0 flex-col border-r border-slate-200/80 bg-slate-100/60 transition-[width] duration-300 ease-out lg:flex dark:border-slate-800/80 dark:bg-slate-950 ${
           collapsed ? "w-[68px]" : "w-64"
         }`}
       >
         <div className={`flex h-16 items-center ${collapsed ? "justify-center" : "justify-between px-5"}`}>
           <Link href="/" aria-label="Início" className="rounded-lg"><Logo compact={collapsed} /></Link>
           {!collapsed && (
-            <button className="icon-btn size-7" onClick={toggleCollapsed} aria-label="Recolher menu" title="Recolher menu">
-              <ChevronsLeft className="size-4" aria-hidden />
-            </button>
+            <div className="flex items-center gap-0.5">
+              {isDesktop && <NotificationBell />}
+              <button className="icon-btn size-7" onClick={toggleCollapsed} aria-label="Recolher menu" title="Recolher menu">
+                <ChevronsLeft className="size-4" aria-hidden />
+              </button>
+            </div>
           )}
         </div>
         {collapsed && (
-          <button className="icon-btn mx-auto mb-2 size-7" onClick={toggleCollapsed} aria-label="Expandir menu" title="Expandir menu">
-            <ChevronsLeft className="size-4 rotate-180" aria-hidden />
-          </button>
+          <div className="mb-2 flex flex-col items-center gap-1">
+            {isDesktop && <NotificationBell />}
+            <button className="icon-btn size-7" onClick={toggleCollapsed} aria-label="Expandir menu" title="Expandir menu">
+              <ChevronsLeft className="size-4 rotate-180" aria-hidden />
+            </button>
+          </div>
         )}
         {nav(collapsed)}
         {footer(collapsed)}

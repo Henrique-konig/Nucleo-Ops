@@ -41,6 +41,7 @@ export default async function BoardPage({ params, searchParams }: PageProps<"/bo
         assign: can(user.role, "card:assign"),
         manageColumns: can(user.role, "column:manage"),
         runAgents: can(user.role, "ai:use"),
+        comment: can(user.role, "card:comment"),
       }}
     />
   );
