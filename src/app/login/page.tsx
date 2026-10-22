@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { AuthError } from "next-auth";
 import { signIn } from "@/auth";
 import { currentUser } from "@/lib/session";
+import { ConfigError, missingConfig } from "@/components/config-check";
 import { needsSetup } from "@/lib/setup";
 
 export const metadata: Metadata = { title: "Entrar" };
@@ -23,6 +24,8 @@ async function login(formData: FormData) {
 }
 
 export default async function LoginPage({ searchParams }: PageProps<"/login">) {
+  const missing = missingConfig();
+  if (missing.length > 0) return <ConfigError missing={missing} />;
   if (await needsSetup()) redirect("/setup");
   if (await currentUser()) redirect("/");
   const { erro, configurado } = await searchParams;
