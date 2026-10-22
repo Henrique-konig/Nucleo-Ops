@@ -29,8 +29,10 @@ const setupSchema = z.object({
 
 export async function runSetup(input: z.input<typeof setupSchema>) {
   const data = setupSchema.parse(input);
-  const expected = process.env.SETUP_TOKEN;
-  if (expected && !safeEqual(data.token ?? "", expected)) throw new BusinessError("Código de configuração inválido");
+  // Tolera espaços e aspas coladas junto com o valor no painel ou no formulário.
+  const clean = (v: string) => v.trim().replace(/^["']|["']$/g, "").trim();
+  const expected = clean(process.env.SETUP_TOKEN ?? "");
+  if (expected && !safeEqual(clean(data.token ?? ""), expected)) throw new BusinessError("Código de configuração inválido");
   const passwordHash = await bcrypt.hash(data.password, 12);
 
   return db.$transaction(async (tx) => {
