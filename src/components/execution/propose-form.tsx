@@ -12,8 +12,8 @@ export function ProposeExecutionForm({ catalog, action }: { catalog: CatalogItem
   const item = catalog.find((c) => c.key === key);
   return (
     <ActionForm action={action} successMessage="Ação proposta. Ela aguarda confirmação em Execuções." className="space-y-2">
-      <label className="block space-y-1">
-        <span className="text-sm font-medium">Ação</span>
+      <label className="block space-y-1.5">
+        <span className="field-label">Ação</span>
         <select name="actionKey" value={key} onChange={(e) => setKey(e.target.value)} className="input">
           {catalog.map((c) => <option key={c.key} value={c.key}>{c.label}{c.sensitive ? " (sensível)" : ""}</option>)}
         </select>
@@ -21,15 +21,15 @@ export function ProposeExecutionForm({ catalog, action }: { catalog: CatalogItem
       {item && <p className="text-xs text-slate-600 dark:text-slate-400">{item.description}</p>}
       {item && Object.entries(item.params).map(([name, help]) => (
         <label key={`${key}-${name}`} className="block space-y-1">
-          <span className="text-sm">{name} <span className="text-xs text-slate-500">({help})</span></span>
-          <input name={`param.${name}`} required className="input py-1" />
+          <span className="field-label">{name} <span className="text-xs text-slate-500">({help})</span></span>
+          <input name={`param.${name}`} required className="input py-1.5" />
         </label>
       ))}
-      <label className="block space-y-1">
-        <span className="text-sm">Motivo</span>
-        <input name="reason" maxLength={500} className="input py-1" />
+      <label className="block space-y-1.5">
+        <span className="field-label">Motivo</span>
+        <input name="reason" maxLength={500} className="input py-1.5" />
       </label>
-      <button className="btn">Propor ação</button>
+      <button className="btn w-full">Propor ação</button>
     </ActionForm>
   );
 }

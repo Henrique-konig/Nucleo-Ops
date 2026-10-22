@@ -18,13 +18,13 @@ export function RequesterTicketView({
 }) {
   const resolved = ticket.status === "RESOLVED" || ticket.status === "CLOSED";
   return (
-    <main className="mx-auto max-w-3xl space-y-6 p-6">
-      <header className="space-y-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-xl font-semibold">{ticket.title}</h1>
+    <main className="mx-auto max-w-3xl space-y-6 px-4 py-8 sm:px-6 lg:px-10 lg:py-10">
+      <header className="animate-rise space-y-2">
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="page-title">{ticket.title}</h1>
           <StatusBadge status={ticket.status} />
         </div>
-        <p className="text-sm text-slate-600 dark:text-slate-400">
+        <p className="text-sm text-slate-500 dark:text-slate-400">
           Chamado #{ticket.id.slice(-8)} · aberto em {formatDateTime(ticket.createdAt)}
           {ticket.card?.assignee && <> · com {ticket.card.assignee.name}</>}
         </p>
@@ -34,9 +34,9 @@ export function RequesterTicketView({
 
       {resolved && <RatingForm current={ticket.satisfaction} action={rate} />}
 
-      <ActionForm action={sendMessage} className="space-y-2">
-        <label className="block space-y-1">
-          <span className="text-sm font-medium">{resolved ? "O problema voltou? Escreva aqui para reabrir" : "Responder"}</span>
+      <ActionForm action={sendMessage} className="panel space-y-3 p-4">
+        <label className="block space-y-1.5">
+          <span className="field-label">{resolved ? "O problema voltou? Escreva aqui para reabrir" : "Responder"}</span>
           <textarea name="content" required rows={3} className="input" />
         </label>
         <button className="btn-primary">Enviar</button>

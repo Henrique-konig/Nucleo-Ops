@@ -17,17 +17,17 @@ export default async function AutomationsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Automações do quadro</h1>
-      <p className="text-sm text-slate-600 dark:text-slate-400">Quando um cartão entra na coluna, a ação é executada. Toda execução fica no log de auditoria.</p>
+      <h1 className="page-title">Automações do quadro</h1>
+      <p className="text-sm text-slate-500 dark:text-slate-400">Quando um cartão entra na coluna, a ação é executada. Toda execução fica no log de auditoria.</p>
 
       {rules.length === 0 ? (
-        <p className="text-sm text-slate-600 dark:text-slate-400">Nenhuma automação.</p>
+        <p className="empty py-8">Nenhuma automação. Crie a primeira abaixo.</p>
       ) : (
         <ul className="space-y-2">
           {rules.map((r) => {
             const config = r.config as { message?: string; userId?: string };
             return (
-              <li key={r.id} className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white p-3 text-sm dark:border-slate-800 dark:bg-slate-900 ${r.active ? "" : "opacity-60"}`}>
+              <li key={r.id} className={`panel flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm ${r.active ? "" : "opacity-60"}`}>
                 <span>
                   Ao entrar em <strong>{r.column.name}</strong> ({r.column.board.name}): {AUTOMATION_LABELS[r.action]}
                   {r.action === "ASSIGN" ? ` → ${memberName(config.userId)}` : config.message ? ` — “${config.message}”` : ""}
@@ -41,28 +41,28 @@ export default async function AutomationsPage() {
         </ul>
       )}
 
-      <section className="space-y-2 rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-        <h2 className="font-semibold">Nova automação</h2>
-        <ActionForm action={createAutomationAction} className="grid gap-2 sm:grid-cols-2">
+      <section className="panel space-y-4 p-5">
+        <h2 className="section-title">Nova automação</h2>
+        <ActionForm action={createAutomationAction} className="grid gap-3 sm:grid-cols-2">
           <label className="space-y-1">
-            <span className="block text-xs font-medium">Quando o cartão entrar em</span>
-            <select name="columnId" required className="input py-1">
+            <span className="block text-xs font-medium text-slate-500 dark:text-slate-400">Quando o cartão entrar em</span>
+            <select name="columnId" required className="input py-1.5">
               {columns.map((c) => <option key={c.id} value={c.id}>{c.board.name} › {c.name}</option>)}
             </select>
           </label>
           <label className="space-y-1">
-            <span className="block text-xs font-medium">Fazer</span>
-            <select name="action" className="input py-1">
+            <span className="block text-xs font-medium text-slate-500 dark:text-slate-400">Fazer</span>
+            <select name="action" className="input py-1.5">
               {Object.entries(AUTOMATION_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select>
           </label>
           <label className="space-y-1">
-            <span className="block text-xs font-medium">Mensagem (avisos)</span>
-            <input name="message" maxLength={500} className="input py-1" placeholder="ex.: Cartão aguardando revisão" />
+            <span className="block text-xs font-medium text-slate-500 dark:text-slate-400">Mensagem (avisos)</span>
+            <input name="message" maxLength={500} className="input py-1.5" placeholder="ex.: Cartão aguardando revisão" />
           </label>
           <label className="space-y-1">
-            <span className="block text-xs font-medium">Responsável (atribuição)</span>
-            <select name="userId" className="input py-1" defaultValue="">
+            <span className="block text-xs font-medium text-slate-500 dark:text-slate-400">Responsável (atribuição)</span>
+            <select name="userId" className="input py-1.5" defaultValue="">
               <option value="">—</option>
               {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
             </select>

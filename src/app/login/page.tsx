@@ -5,6 +5,7 @@ import { signIn } from "@/auth";
 import { currentUser } from "@/lib/session";
 import { ConfigError, missingConfig } from "@/components/config-check";
 import { needsSetup } from "@/lib/setup";
+import { AuthShell } from "@/components/shell/auth-shell";
 
 export const metadata: Metadata = { title: "Entrar" };
 export const dynamic = "force-dynamic";
@@ -31,32 +32,32 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
   const { erro, configurado } = await searchParams;
 
   return (
-    <main className="flex min-h-screen items-center justify-center p-4">
-      <form action={login} className="w-full max-w-sm space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    <AuthShell>
+      <form action={login} className="space-y-5">
         <div>
-          <h1 className="text-2xl font-semibold">Plantão</h1>
-          <p className="text-sm text-slate-600 dark:text-slate-400">Central de operações para TI</p>
+          <h1 className="page-title">Bem-vindo de volta</h1>
+          <p className="page-subtitle">Entre com sua conta para acessar o Plantão.</p>
         </div>
         {configurado && (
-          <p role="status" className="rounded-md bg-green-50 p-2 text-sm text-green-900 dark:bg-green-950 dark:text-green-100">
+          <p role="status" className="alert-success">
             Equipe criada. Entre com a conta de administrador.
           </p>
         )}
         {erro && (
-          <p role="alert" className="rounded-md bg-red-50 p-2 text-sm text-red-800 dark:bg-red-950 dark:text-red-200">
+          <p role="alert" className="alert-error">
             E-mail ou senha incorretos.
           </p>
         )}
-        <label className="block space-y-1">
-          <span className="text-sm font-medium">E-mail</span>
+        <label className="block space-y-1.5">
+          <span className="field-label">E-mail</span>
           <input name="email" type="email" required autoComplete="email" className="input" />
         </label>
-        <label className="block space-y-1">
-          <span className="text-sm font-medium">Senha</span>
+        <label className="block space-y-1.5">
+          <span className="field-label">Senha</span>
           <input name="password" type="password" required autoComplete="current-password" className="input" />
         </label>
-        <button type="submit" className="btn-primary w-full">Entrar</button>
+        <button type="submit" className="btn-primary w-full py-2.5">Entrar</button>
       </form>
-    </main>
+    </AuthShell>
   );
 }

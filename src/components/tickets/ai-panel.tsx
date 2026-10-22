@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Sparkles } from "lucide-react";
 import { ActionForm } from "./action-form";
 
 type Result = { ok: true; data?: unknown } | { ok: false; error: string };
@@ -20,10 +21,15 @@ export function AiPanel(props: {
 }) {
   const { triage, draft } = props;
   return (
-    <section aria-labelledby="ai-panel" className="space-y-4 rounded-lg border border-violet-200 bg-violet-50/60 p-4 text-sm dark:border-violet-900 dark:bg-violet-950/40">
-      <div className="flex items-baseline justify-between">
-        <h2 id="ai-panel" className="font-semibold">Assistente</h2>
-        {props.costBrl > 0 && <span className="text-xs text-slate-600 dark:text-slate-400">Custo de IA: R$ {props.costBrl.toFixed(2)}</span>}
+    <section aria-labelledby="ai-panel" className="relative space-y-4 overflow-hidden rounded-xl border border-brand-200/80 bg-gradient-to-br from-brand-50 via-white to-violet-50 p-5 text-sm shadow-card dark:border-brand-900/60 dark:from-brand-950/50 dark:via-slate-900/70 dark:to-violet-950/30">
+      <div className="flex items-center justify-between gap-2">
+        <h2 id="ai-panel" className="flex items-center gap-2 font-semibold">
+          <span className="grid size-7 place-items-center rounded-lg bg-gradient-to-br from-violet-500 to-brand-600 text-white shadow-glow">
+            <Sparkles className="size-4" aria-hidden />
+          </span>
+          Assistente
+        </h2>
+        {props.costBrl > 0 && <span className="badge bg-white/70 text-slate-600 dark:bg-slate-900/70 dark:text-slate-400">Custo de IA: R$ {props.costBrl.toFixed(2)}</span>}
       </div>
 
       {triage && (
@@ -44,17 +50,17 @@ export function AiPanel(props: {
 
       {draft && props.send ? (
         <ActionForm action={props.send} className="space-y-2">
-          <label className="block space-y-1">
-            <span className="font-medium">Rascunho de resposta (revise antes de enviar)</span>
+          <label className="block space-y-1.5">
+            <span className="field-label">Rascunho de resposta (revise antes de enviar)</span>
             <textarea name="content" defaultValue={draft.content} rows={8} className="input" />
           </label>
           {draft.sources.length > 0 ? (
             <div>
-              <p className="text-xs font-medium">Fontes</p>
+              <p className="eyebrow mb-1">Fontes</p>
               <ul className="list-disc pl-5 text-xs">
                 {draft.sources.map((s) => (
                   <li key={s.id}>
-                    <Link className="underline" href={s.type === "document" ? `/base/${s.id}` : `/chamados/${s.id}`}>
+                    <Link className="link" href={s.type === "document" ? `/base/${s.id}` : `/chamados/${s.id}`}>
                       {s.type === "document" ? "Documento" : "Chamado"}: {s.title}
                     </Link>
                   </li>
@@ -75,7 +81,7 @@ export function AiPanel(props: {
       )}
       {draft && props.discard && props.canEdit && (
         <ActionForm action={props.discard} resetOnSuccess={false}>
-          <button className="text-xs text-slate-600 underline dark:text-slate-400">Descartar rascunho</button>
+          <button className="text-xs text-slate-500 underline-offset-4 hover:text-red-600 hover:underline dark:text-slate-400">Descartar rascunho</button>
         </ActionForm>
       )}
     </section>

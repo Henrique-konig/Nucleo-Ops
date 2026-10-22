@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { requireUser } from "@/lib/session";
 import { can, type Permission } from "@/lib/permissions";
+import { SubNav } from "@/components/shell/sub-nav";
 
 const SECTIONS: { href: string; label: string; permission: Permission }[] = [
   { href: "/admin/usuarios", label: "Usuários", permission: "user:manage" },
@@ -13,12 +13,11 @@ const SECTIONS: { href: string; label: string; permission: Permission }[] = [
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser("automation:configure");
   return (
-    <div className="mx-auto max-w-6xl p-6">
-      <nav aria-label="Administração" className="mb-6 flex flex-wrap gap-2 border-b border-slate-200 pb-3 dark:border-slate-800">
-        {SECTIONS.filter((s) => can(user.role, s.permission)).map((s) => (
-          <Link key={s.href} href={s.href} className="rounded-md px-3 py-1.5 text-sm hover:bg-slate-200 dark:hover:bg-slate-800">{s.label}</Link>
-        ))}
-      </nav>
+    <div className="mx-auto max-w-6xl space-y-8 px-4 py-8 sm:px-6 lg:px-10 lg:py-10">
+      <div className="animate-rise space-y-4">
+        <p className="eyebrow">Administração</p>
+        <SubNav label="Administração" items={SECTIONS.filter((s) => can(user.role, s.permission)).map(({ href, label }) => ({ href, label }))} />
+      </div>
       {children}
     </div>
   );

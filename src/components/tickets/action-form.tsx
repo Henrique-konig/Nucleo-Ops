@@ -51,7 +51,7 @@ export function ActionForm({
         {children}
       </fieldset>
       {feedback && (
-        <p role={feedback.ok ? "status" : "alert"} className={`text-sm ${feedback.ok ? "text-green-800 dark:text-green-300" : "text-red-700 dark:text-red-300"}`}>
+        <p role={feedback.ok ? "status" : "alert"} className={`animate-rise ${feedback.ok ? "alert-success" : "alert-error"}`}>
           {feedback.text}
         </p>
       )}

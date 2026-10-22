@@ -7,12 +7,12 @@ import { approveExecution, rejectExecution } from "@/app/(app)/execucoes/actions
 import type { ExecutionStatus } from "@/generated/prisma/enums";
 
 const STATUS: Record<ExecutionStatus, { label: string; style: string }> = {
-  PROPOSED: { label: "Aguardando confirmação", style: "bg-amber-100 text-amber-900 dark:bg-amber-900 dark:text-amber-100" },
-  APPROVED: { label: "Confirmada, executando", style: "bg-sky-100 text-sky-900 dark:bg-sky-900 dark:text-sky-100" },
+  PROPOSED: { label: "Aguardando confirmação", style: "bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300" },
+  APPROVED: { label: "Confirmada, executando", style: "bg-brand-50 text-brand-700 dark:bg-brand-950/60 dark:text-brand-300" },
   REJECTED: { label: "Rejeitada", style: "bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-100" },
-  EXECUTED: { label: "Executada", style: "bg-green-100 text-green-900 dark:bg-green-900 dark:text-green-100" },
-  SIMULATED: { label: "Simulada", style: "bg-violet-100 text-violet-900 dark:bg-violet-900 dark:text-violet-100" },
-  FAILED: { label: "Falhou", style: "bg-red-100 text-red-900 dark:bg-red-900 dark:text-red-100" },
+  EXECUTED: { label: "Executada", style: "bg-green-50 text-green-700 dark:bg-green-950/60 dark:text-green-300" },
+  SIMULATED: { label: "Simulada", style: "bg-violet-50 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300" },
+  FAILED: { label: "Falhou", style: "bg-red-50 text-red-700 dark:bg-red-950/60 dark:text-red-300" },
 };
 
 export type ExecutionRow = {
@@ -33,7 +33,7 @@ export type ExecutionRow = {
 export function ExecutionList({
   rows, canDecide, canDecideSensitive, currentUserId,
 }: { rows: ExecutionRow[]; canDecide: boolean; canDecideSensitive: boolean; currentUserId: string }) {
-  if (rows.length === 0) return <p className="text-sm text-slate-600 dark:text-slate-400">Nenhuma ação.</p>;
+  if (rows.length === 0) return <p className="empty py-8">Nenhuma ação por aqui.</p>;
   return (
     <ul className="space-y-3">
       {rows.map((r) => {
@@ -41,20 +41,20 @@ export function ExecutionList({
         const sensitive = action?.sensitive ?? true;
         const blocked = sensitive && (!canDecideSensitive || r.proposedBy?.id === currentUserId);
         return (
-          <li key={r.id} className="space-y-2 rounded-lg border border-slate-200 bg-white p-3 text-sm dark:border-slate-800 dark:bg-slate-900">
+          <li key={r.id} className="panel animate-rise space-y-3 p-4 text-sm">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-medium">{action?.label ?? r.actionKey}</span>
-              <span className={`rounded px-1.5 py-0.5 text-xs ${STATUS[r.status].style}`}>{STATUS[r.status].label}</span>
-              {sensitive && <span className="rounded bg-red-50 px-1.5 py-0.5 text-xs text-red-800 dark:bg-red-950 dark:text-red-200">Sensível</span>}
-              {r.dryRun && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs dark:bg-slate-800">Simulação</span>}
+              <span className={`badge ${STATUS[r.status].style}`}>{STATUS[r.status].label}</span>
+              {sensitive && <span className="badge bg-red-50 text-red-700 dark:bg-red-950/60 dark:text-red-300">Sensível</span>}
+              {r.dryRun && <span className="badge bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">Simulação</span>}
             </div>
-            <dl className="grid grid-cols-[auto_1fr] gap-x-3 text-xs">
+            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs">
               {Object.entries((r.params ?? {}) as Record<string, string>).map(([k, v]) => (
                 <Fragment key={k}><dt className="text-slate-500">{k}</dt><dd>{v}</dd></Fragment>
               ))}
               <dt className="text-slate-500">Proposta por</dt>
               <dd>{r.proposedBy?.name ?? "Agente de execução"} · {formatDateTime(r.createdAt)}</dd>
-              {r.ticket && (<><dt className="text-slate-500">Chamado</dt><dd><Link className="underline" href={`/chamados/${r.ticket.id}`}>{r.ticket.title}</Link></dd></>)}
+              {r.ticket && (<><dt className="text-slate-500">Chamado</dt><dd><Link className="link" href={`/chamados/${r.ticket.id}`}>{r.ticket.title}</Link></dd></>)}
               {r.reason && (<><dt className="text-slate-500">Motivo</dt><dd>{r.reason}</dd></>)}
               {r.decidedBy && (<><dt className="text-slate-500">Decidida por</dt><dd>{r.decidedBy.name}</dd></>)}
               {r.result != null && (<><dt className="text-slate-500">Resultado</dt><dd className="break-all font-mono">{JSON.stringify(r.result).slice(0, 400)}</dd></>)}

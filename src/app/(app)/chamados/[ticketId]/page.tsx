@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ArrowLeft, Send } from "lucide-react";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/session";
 import { can } from "@/lib/permissions";
@@ -47,15 +48,18 @@ export default async function StaffTicketPage({ params }: PageProps<"/chamados/[
   const canPrioritize = can(user.role, "card:prioritize");
 
   return (
-    <main className="mx-auto grid max-w-6xl gap-6 p-6 lg:grid-cols-[1fr_20rem]">
+    <main className="mx-auto grid max-w-6xl gap-8 px-4 py-8 sm:px-6 lg:grid-cols-[1fr_21rem] lg:px-10 lg:py-10">
       <div className="space-y-6">
-        <header className="space-y-1">
+        <header className="animate-rise space-y-3">
+          <Link href="/chamados" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white">
+            <ArrowLeft className="size-4" aria-hidden /> Chamados
+          </Link>
+          <h1 className="page-title">{ticket.title}</h1>
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-xl font-semibold">{ticket.title}</h1>
             <StatusBadge status={ticket.status} />
             <PriorityBadge priority={ticket.priority} />
           </div>
-          <p className="text-sm text-slate-600 dark:text-slate-400">
+          <p className="text-sm text-slate-500 dark:text-slate-400">
             #{ticket.id.slice(-8)} · {CHANNEL_LABELS[ticket.channel]} · {ticket.requesterName ?? ticket.requesterEmail} · aberto em {formatDateTime(ticket.createdAt)}
           </p>
         </header>
@@ -77,29 +81,29 @@ export default async function StaffTicketPage({ params }: PageProps<"/chamados/[
         />
 
         {canEdit && (
-          <ActionForm action={reply.bind(null, ticket.id)} className="space-y-2">
-            <label className="block space-y-1">
-              <span className="text-sm font-medium">Responder</span>
-              <textarea name="content" required rows={4} className="input" />
+          <ActionForm action={reply.bind(null, ticket.id)} className="panel space-y-3 p-4">
+            <label className="block space-y-1.5">
+              <span className="field-label">Responder</span>
+              <textarea name="content" required rows={4} className="input" placeholder="Escreva uma resposta ao solicitante…" />
             </label>
-            <div className="flex items-center justify-between gap-2">
-              <label className="flex items-center gap-2 text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
                 <input type="checkbox" name="internal" /> Nota interna (não vai para o solicitante)
               </label>
-              <button className="btn-primary">Enviar</button>
+              <button className="btn-primary"><Send className="size-4" aria-hidden /> Enviar</button>
             </div>
           </ActionForm>
         )}
       </div>
 
-      <aside className="space-y-4">
-        <section className="space-y-3 rounded-lg border border-slate-200 bg-white p-4 text-sm dark:border-slate-800 dark:bg-slate-900">
-          <h2 className="font-semibold">Detalhes</h2>
-          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+      <aside className="space-y-4 lg:sticky lg:top-8 lg:self-start">
+        <section className="panel space-y-3 p-4 text-sm">
+          <h2 className="eyebrow">Detalhes</h2>
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2.5">
             <dt className="text-slate-500">Responsável</dt>
             <dd>{ticket.card?.assignee?.name ?? "—"}</dd>
             <dt className="text-slate-500">Coluna</dt>
-            <dd>{ticket.card ? <Link className="underline" href={`/boards/${ticket.card.boardId}`}>{ticket.card.column.name}</Link> : "—"}</dd>
+            <dd>{ticket.card ? <Link className="link" href={`/boards/${ticket.card.boardId}`}>{ticket.card.column.name}</Link> : "—"}</dd>
             <dt className="text-slate-500">Categoria</dt>
             <dd>{ticket.category ?? "—"}</dd>
             <dt className="text-slate-500">1ª resposta</dt>
@@ -109,9 +113,9 @@ export default async function StaffTicketPage({ params }: PageProps<"/chamados/[
         </section>
 
         {can(user.role, "card:move") && (
-          <ActionForm key={ticket.status} action={changeStatus.bind(null, ticket.id)} resetOnSuccess={false} className="space-y-2 rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-            <label className="block space-y-1">
-              <span className="text-sm font-semibold">Status</span>
+          <ActionForm key={ticket.status} action={changeStatus.bind(null, ticket.id)} resetOnSuccess={false} className="panel space-y-3 p-4">
+            <label className="block space-y-1.5">
+              <span className="eyebrow">Status</span>
               <select name="status" defaultValue={ticket.status} className="input">
                 {Object.entries(STATUS_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
               </select>
@@ -121,15 +125,15 @@ export default async function StaffTicketPage({ params }: PageProps<"/chamados/[
         )}
 
         {canPrioritize && (
-          <ActionForm key={`${ticket.priority}-${ticket.category}`} action={changeFields.bind(null, ticket.id)} resetOnSuccess={false} className="space-y-2 rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-            <label className="block space-y-1">
-              <span className="text-sm font-semibold">Prioridade</span>
+          <ActionForm key={`${ticket.priority}-${ticket.category}`} action={changeFields.bind(null, ticket.id)} resetOnSuccess={false} className="panel space-y-3 p-4">
+            <label className="block space-y-1.5">
+              <span className="eyebrow">Prioridade</span>
               <select name="priority" defaultValue={ticket.priority} className="input">
                 {Object.entries(PRIORITY_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
               </select>
             </label>
-            <label className="block space-y-1">
-              <span className="text-sm font-semibold">Categoria</span>
+            <label className="block space-y-1.5">
+              <span className="eyebrow">Categoria</span>
               <select name="category" defaultValue={ticket.category ?? ""} className="input">
                 <option value="">Sem categoria</option>
                 {team.categories.map((c) => <option key={c}>{c}</option>)}
@@ -139,8 +143,8 @@ export default async function StaffTicketPage({ params }: PageProps<"/chamados/[
           </ActionForm>
         )}
         {canExecute && catalog.length > 0 && (
-          <section aria-labelledby="exec-title" className="space-y-3 rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-            <h2 id="exec-title" className="text-sm font-semibold">Ações pré-aprovadas</h2>
+          <section aria-labelledby="exec-title" className="panel space-y-3 p-4">
+            <h2 id="exec-title" className="eyebrow">Ações pré-aprovadas</h2>
             {executions.length > 0 && (
               <ExecutionList rows={executions} canDecide={can(user.role, "execution:approve")} canDecideSensitive={can(user.role, "execution:approve_sensitive")} currentUserId={user.id} />
             )}

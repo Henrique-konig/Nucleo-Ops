@@ -2,10 +2,12 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { CalendarClock, CheckSquare, GripVertical, MoreHorizontal, Plus, Radio, Ticket, X } from "lucide-react";
 import type { BoardCard, BoardData } from "@/lib/boards";
 import * as actions from "@/app/(app)/boards/[boardId]/actions";
 import { CardDialog } from "./card-dialog";
-import { LABEL_COLORS, type LabelOption, type MemberOption } from "./shared";
+import { initials } from "@/lib/initials";
+import { COLUMN_ACCENTS, LABEL_COLORS, type LabelOption, type MemberOption } from "./shared";
 
 export type BoardPermissions = {
   createCard: boolean;
@@ -119,25 +121,41 @@ export function BoardView({ board, members, labels, permissions }: Props) {
     if (cardId) move(cardId, columnId, index);
   }
 
+  const totalCards = columns.reduce((n, c) => n + c.cards.length, 0);
   const openCard = openCardId ? columns.flatMap((c) => c.cards).find((c) => c.id === openCardId) : undefined;
 
   return (
-    <main className="flex h-[calc(100vh-49px)] flex-col">
-      <div className="flex items-center justify-between gap-4 px-4 py-3">
-        <h1 className="text-lg font-semibold">{board.name}</h1>
-        <span className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
-          <span
-            aria-hidden
-            className={`size-2 rounded-full ${live === "online" ? "bg-green-500" : live === "offline" ? "bg-red-500" : "bg-amber-400"}`}
-          />
-          {live === "online" ? "Atualização em tempo real" : live === "offline" ? "Reconectando…" : "Conectando…"}
+    <main className="flex h-[calc(100dvh-3.5rem)] flex-col lg:h-dvh">
+      <div className="flex flex-wrap items-end justify-between gap-4 px-4 pt-6 pb-5 sm:px-6 lg:px-8 lg:pt-8">
+        <div className="animate-rise">
+          <p className="eyebrow">Quadro</p>
+          <h1 className="page-title mt-1">{board.name}</h1>
+          <p className="page-subtitle">
+            {totalCards === 0 ? "Nenhum cartão ainda" : `${totalCards} ${totalCards === 1 ? "cartão" : "cartões"} em ${columns.length} colunas`}
+          </p>
+        </div>
+        <span
+          className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium ${
+            live === "online"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300"
+              : live === "offline"
+                ? "border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300"
+                : "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300"
+          }`}
+        >
+          <span className="relative flex size-2" aria-hidden>
+            {live === "online" && <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-60" />}
+            <span className={`relative inline-flex size-2 rounded-full ${live === "online" ? "bg-emerald-500" : live === "offline" ? "bg-red-500" : "bg-amber-400"}`} />
+          </span>
+          <Radio className="size-3.5" aria-hidden />
+          {live === "online" ? "Tempo real" : live === "offline" ? "Reconectando…" : "Conectando…"}
         </span>
       </div>
 
       {error && (
-        <div role="alert" className="mx-4 mb-2 flex items-center justify-between rounded-md bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-950 dark:text-red-200">
+        <div role="alert" className="alert-error mx-4 mb-3 animate-rise sm:mx-6 lg:mx-8">
           {error}
-          <button className="underline" onClick={() => setError(null)}>Fechar</button>
+          <button className="icon-btn size-6" aria-label="Fechar aviso" onClick={() => setError(null)}><X className="size-4" aria-hidden /></button>
         </div>
       )}
       <p aria-live="polite" className="sr-only">{announcement}</p>
@@ -147,12 +165,17 @@ export function BoardView({ board, members, labels, permissions }: Props) {
         </p>
       )}
 
-      <div className="flex flex-1 gap-3 overflow-x-auto px-4 pb-4">
+      <div className="flex flex-1 snap-x gap-4 overflow-x-auto px-4 pb-6 sm:px-6 lg:px-8">
         {columns.map((column, columnIndex) => (
           <section
             key={column.id}
             aria-labelledby={`column-${column.id}`}
-            className="flex w-72 shrink-0 flex-col rounded-lg bg-slate-200/60 dark:bg-slate-900"
+            style={{ animationDelay: `${columnIndex * 50}ms` }}
+            className={`flex w-[19rem] shrink-0 animate-rise snap-start flex-col rounded-2xl border transition-colors duration-200 ${
+              dragging && dropTarget?.columnId === column.id
+                ? "border-brand-300 bg-brand-50/60 dark:border-brand-800 dark:bg-brand-950/30"
+                : "border-slate-200/70 bg-slate-100/70 dark:border-slate-800/70 dark:bg-slate-900/40"
+            }`}
             onDragOver={(e) => {
               if (!dragging) return;
               e.preventDefault();
@@ -163,7 +186,7 @@ export function BoardView({ board, members, labels, permissions }: Props) {
           >
             <ColumnHeader column={column} canManage={permissions.manageColumns} onResult={report} index={columnIndex} total={columns.length} />
 
-            <ol className="flex min-h-8 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
+            <ol className="flex min-h-16 flex-1 flex-col gap-2 overflow-y-auto px-2.5 pt-0.5 pb-2.5">
               {column.cards.map((card, cardIndex) => (
                 <li
                   key={card.id}
@@ -198,14 +221,21 @@ export function BoardView({ board, members, labels, permissions }: Props) {
                     }}
                     onClick={() => setOpenCardId(card.id)}
                     onKeyDown={(e) => onCardKeyDown(e, card, columnIndex, cardIndex)}
-                    className={`cursor-pointer rounded-md border border-slate-200 bg-white p-2 text-sm shadow-sm hover:border-sky-400 dark:border-slate-700 dark:bg-slate-800 ${dragging === card.id ? "opacity-40" : ""}`}
+                    className={`group relative cursor-pointer overflow-hidden rounded-xl border border-slate-200/80 bg-white p-3 text-sm shadow-card transition duration-200 hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-lift active:cursor-grabbing dark:border-slate-700/60 dark:bg-slate-800/70 dark:hover:border-brand-700 ${
+                      dragging === card.id ? "scale-[0.97] rotate-1 opacity-40" : ""
+                    }`}
                   >
-                    <CardSummary card={card} />
+                    <CardSummary card={card} draggable={permissions.moveCard} />
                   </div>
                   {dropTarget?.columnId === column.id && dropTarget.index === cardIndex + 1 && cardIndex === column.cards.length - 1 && <DropIndicator />}
                 </li>
               ))}
               {column.cards.length === 0 && dropTarget?.columnId === column.id && <DropIndicator />}
+              {column.cards.length === 0 && dropTarget?.columnId !== column.id && (
+                <li className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-slate-300/80 px-3 py-8 text-center text-xs text-slate-400 dark:border-slate-700/70 dark:text-slate-500">
+                  {permissions.moveCard ? "Arraste cartões para cá" : "Nenhum cartão"}
+                </li>
+              )}
             </ol>
 
             {permissions.createCard && <NewCardForm boardId={board.id} columnId={column.id} onResult={report} />}
@@ -234,44 +264,71 @@ export function BoardView({ board, members, labels, permissions }: Props) {
 
 const PRIORITY_NAMES = { LOW: "baixa", MEDIUM: "média", HIGH: "alta", URGENT: "urgente" } as const;
 const PRIORITY_STYLE = {
-  LOW: "bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200",
-  MEDIUM: "bg-sky-100 text-sky-900 dark:bg-sky-900 dark:text-sky-100",
-  HIGH: "bg-orange-100 text-orange-900 dark:bg-orange-900 dark:text-orange-100",
-  URGENT: "bg-red-100 text-red-900 dark:bg-red-900 dark:text-red-100",
+  LOW: "bg-slate-100 text-slate-600 dark:bg-slate-700/60 dark:text-slate-300",
+  MEDIUM: "bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300",
+  HIGH: "bg-orange-50 text-orange-700 dark:bg-orange-950/60 dark:text-orange-300",
+  URGENT: "bg-red-50 text-red-700 dark:bg-red-950/60 dark:text-red-300",
 } as const;
+const PRIORITY_BAR = { LOW: "bg-slate-300 dark:bg-slate-600", MEDIUM: "bg-sky-400", HIGH: "bg-orange-400", URGENT: "bg-red-500" } as const;
 
 function DropIndicator() {
-  return <div aria-hidden className="my-1 h-1 rounded bg-sky-500" />;
+  return <div aria-hidden className="my-0.5 h-1 animate-fade-in rounded-full bg-brand-500 shadow-[0_0_12px_rgb(116_104_241/0.7)]" />;
 }
 
-function CardSummary({ card }: { card: BoardCard }) {
+function CardSummary({ card, draggable }: { card: BoardCard; draggable: boolean }) {
   const done = card.checklist.filter((i) => i.done).length;
   const overdue = card.dueDate && new Date(card.dueDate) < new Date();
+  const hasMeta = card.dueDate || card.checklist.length > 0 || card.assignee;
   return (
     <>
+      {card.ticket && <span aria-hidden className={`absolute inset-y-0 left-0 w-1 ${PRIORITY_BAR[card.ticket.priority]}`} />}
+      {draggable && (
+        <GripVertical aria-hidden className="absolute top-3 right-2 size-4 text-slate-300 opacity-0 transition-opacity group-hover:opacity-100 dark:text-slate-600" />
+      )}
       {card.labels.length > 0 && (
-        <div className="mb-1 flex flex-wrap gap-1">
+        <div className="mb-2 flex flex-wrap gap-1">
           {card.labels.map((l) => (
-            <span key={l.id} className={`rounded px-1.5 text-xs ${LABEL_COLORS[l.color] ?? LABEL_COLORS.slate}`}>{l.name}</span>
+            <span key={l.id} className={`badge text-[11px] ${LABEL_COLORS[l.color] ?? LABEL_COLORS.slate}`}>{l.name}</span>
           ))}
         </div>
       )}
-      <p className="font-medium">{card.title}</p>
+      <p className="pr-4 leading-snug font-medium text-slate-800 dark:text-slate-100">{card.title}</p>
       {card.ticket && (
-        <p className="mt-1 flex flex-wrap gap-1 text-xs">
-          <span className={`rounded px-1.5 ${PRIORITY_STYLE[card.ticket.priority]}`}>Chamado · {PRIORITY_NAMES[card.ticket.priority]}</span>
+        <p className="mt-2 flex flex-wrap gap-1">
+          <span className={`badge ${PRIORITY_STYLE[card.ticket.priority]}`}>
+            <Ticket className="size-3" aria-hidden /> Chamado · {PRIORITY_NAMES[card.ticket.priority]}
+          </span>
         </p>
       )}
-      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600 dark:text-slate-400">
-        {card.dueDate && (
-          <span className={overdue ? "font-medium text-red-700 dark:text-red-400" : ""}>
-            {overdue ? "Atrasado · " : "Prazo · "}
-            {new Date(card.dueDate).toLocaleDateString("pt-BR", { timeZone: "UTC" })}
-          </span>
-        )}
-        {card.checklist.length > 0 && <span>Checklist {done}/{card.checklist.length}</span>}
-        {card.assignee && <span>{card.assignee.name}</span>}
-      </div>
+      {hasMeta && (
+        <div className="mt-3 flex items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            {card.dueDate && (
+              <span className={`inline-flex items-center gap-1 ${overdue ? "rounded-md bg-red-50 px-1.5 py-0.5 font-medium text-red-700 dark:bg-red-950/60 dark:text-red-300" : ""}`}>
+                <CalendarClock className="size-3.5" aria-hidden />
+                <span className="sr-only">{overdue ? "Atrasado · " : "Prazo · "}</span>
+                {new Date(card.dueDate).toLocaleDateString("pt-BR", { timeZone: "UTC", day: "2-digit", month: "short" })}
+              </span>
+            )}
+            {card.checklist.length > 0 && (
+              <span className={`inline-flex items-center gap-1 ${done === card.checklist.length ? "text-emerald-600 dark:text-emerald-400" : ""}`}>
+                <CheckSquare className="size-3.5" aria-hidden />
+                <span className="sr-only">Checklist </span>
+                {done}/{card.checklist.length}
+              </span>
+            )}
+          </div>
+          {card.assignee && (
+            <span
+              title={card.assignee.name}
+              className="grid size-6 shrink-0 place-items-center rounded-full bg-gradient-to-br from-brand-400 to-brand-600 text-[10px] font-semibold text-white ring-2 ring-white dark:ring-slate-800"
+            >
+              <span aria-hidden>{initials(card.assignee.name)}</span>
+              <span className="sr-only">{card.assignee.name}</span>
+            </span>
+          )}
+        </div>
+      )}
     </>
   );
 }
@@ -291,7 +348,7 @@ function ColumnHeader({
   if (editing) {
     return (
       <form
-        className="flex gap-1 p-2"
+        className="flex gap-1 p-2.5"
         action={(fd) =>
           startTransition(async () => {
             if (onResult(await actions.renameColumn({ columnId: column.id, name: String(fd.get("name")) }))) setEditing(false);
@@ -307,32 +364,37 @@ function ColumnHeader({
   }
 
   return (
-    <div className="flex items-center justify-between gap-1 px-3 py-2">
-      <h2 id={`column-${column.id}`} className="text-sm font-semibold">
-        {column.name} <span className="font-normal text-slate-500 dark:text-slate-400">{column.cards.length}</span>
+    <div className="flex items-center justify-between gap-1 px-3.5 pt-3 pb-2.5">
+      <h2 id={`column-${column.id}`} className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
+        <span aria-hidden className={`size-2 rounded-full ${COLUMN_ACCENTS[index % COLUMN_ACCENTS.length]}`} />
+        {column.name}
+        <span className="rounded-full bg-slate-200/80 px-2 py-0.5 text-[11px] font-medium text-slate-600 tabular-nums dark:bg-slate-800 dark:text-slate-400">
+          {column.cards.length}
+        </span>
       </h2>
       {canManage && (
         <details className="relative">
-          <summary className="cursor-pointer list-none rounded px-1 text-slate-600 hover:bg-slate-300 dark:text-slate-400 dark:hover:bg-slate-800" aria-label={`Opções da coluna ${column.name}`}>
-            ⋯
+          <summary className="icon-btn size-7 cursor-pointer" aria-label={`Opções da coluna ${column.name}`}>
+            <MoreHorizontal className="size-4" aria-hidden />
           </summary>
-          <div className="absolute right-0 z-10 mt-1 flex w-56 flex-col rounded-md border border-slate-200 bg-white p-1 text-sm shadow-lg dark:border-slate-700 dark:bg-slate-900">
-            <button className="rounded px-2 py-1 text-left hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => setEditing(true)}>Renomear</button>
+          <div className="menu">
+            <button className="menu-item" onClick={() => setEditing(true)}>Renomear</button>
             <button
-              className="rounded px-2 py-1 text-left hover:bg-slate-100 disabled:opacity-40 dark:hover:bg-slate-800"
+              className="menu-item"
               disabled={index === 0 || pending}
               onClick={() => startTransition(async () => { onResult(await actions.moveColumn({ columnId: column.id, toIndex: index - 1 })); })}
             >
               Mover para a esquerda
             </button>
             <button
-              className="rounded px-2 py-1 text-left hover:bg-slate-100 disabled:opacity-40 dark:hover:bg-slate-800"
+              className="menu-item"
               disabled={index === total - 1 || pending}
               onClick={() => startTransition(async () => { onResult(await actions.moveColumn({ columnId: column.id, toIndex: index + 1 })); })}
             >
               Mover para a direita
             </button>
-            <label className="px-2 py-1 text-xs text-slate-600 dark:text-slate-400">
+            <div className="my-1 h-px bg-slate-100 dark:bg-slate-800" aria-hidden />
+            <label className="px-2.5 py-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">
               Status do chamado ao entrar
               <select
                 className="input mt-1 py-1 text-sm"
@@ -352,8 +414,9 @@ function ColumnHeader({
                 <option value="CLOSED">Encerrado</option>
               </select>
             </label>
+            <div className="my-1 h-px bg-slate-100 dark:bg-slate-800" aria-hidden />
             <button
-              className="rounded px-2 py-1 text-left text-red-700 hover:bg-red-50 disabled:opacity-40 dark:text-red-300 dark:hover:bg-red-950"
+              className="menu-item text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/60"
               disabled={pending}
               onClick={() => {
                 if (confirm(`Excluir a coluna "${column.name}"?`)) {
@@ -377,15 +440,18 @@ function NewCardForm({ boardId, columnId, onResult }: { boardId: string; columnI
 
   if (!open) {
     return (
-      <button className="m-2 rounded-md px-2 py-1 text-left text-sm text-slate-700 hover:bg-slate-300/60 dark:text-slate-300 dark:hover:bg-slate-800" onClick={() => setOpen(true)}>
-        + Adicionar cartão
+      <button
+        className="mx-2.5 mb-2.5 flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-left text-sm font-medium text-slate-500 transition hover:bg-white hover:text-slate-900 hover:shadow-card dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
+        onClick={() => setOpen(true)}
+      >
+        <Plus className="size-4" aria-hidden /> Adicionar cartão
       </button>
     );
   }
   return (
     <form
       ref={formRef}
-      className="space-y-2 p-2"
+      className="animate-rise space-y-2 px-2.5 pb-2.5"
       action={(fd) =>
         startTransition(async () => {
           if (onResult(await actions.createCard({ boardId, columnId, title: String(fd.get("title")) }))) formRef.current?.reset();
@@ -411,7 +477,7 @@ function NewCardForm({ boardId, columnId, onResult }: { boardId: string; columnI
       />
       <div className="flex gap-2">
         <button className="btn-primary py-1.5" disabled={pending}>Adicionar</button>
-        <button type="button" className="btn" onClick={() => setOpen(false)}>Cancelar</button>
+        <button type="button" className="btn-ghost" onClick={() => setOpen(false)}>Cancelar</button>
       </div>
     </form>
   );
@@ -423,7 +489,7 @@ function NewColumnForm({ boardId, onResult }: { boardId: string; onResult: (r: a
   return (
     <form
       ref={formRef}
-      className="flex h-fit w-72 shrink-0 gap-2 rounded-lg bg-slate-200/40 p-2 dark:bg-slate-900/60"
+      className="flex h-fit w-[19rem] shrink-0 animate-rise flex-col gap-2 rounded-2xl border border-dashed border-slate-300 p-3 transition-colors focus-within:border-brand-400 hover:border-slate-400 dark:border-slate-700 dark:hover:border-slate-600"
       action={(fd) =>
         startTransition(async () => {
           if (onResult(await actions.createColumn({ boardId, name: String(fd.get("name")) }))) formRef.current?.reset();
@@ -431,8 +497,11 @@ function NewColumnForm({ boardId, onResult }: { boardId: string; onResult: (r: a
       }
     >
       <label className="sr-only" htmlFor="new-column">Nova coluna</label>
-      <input id="new-column" name="name" required placeholder="Nova coluna" className="input py-1" />
-      <button className="btn" disabled={pending}>Criar</button>
+      <p className="flex items-center gap-1.5 text-sm font-medium text-slate-500 dark:text-slate-400"><Plus className="size-4" aria-hidden /> Nova coluna</p>
+      <div className="flex gap-2">
+        <input id="new-column" name="name" required placeholder="Nome da coluna" className="input py-1.5" />
+        <button className="btn" disabled={pending}>Criar</button>
+      </div>
     </form>
   );
 }
