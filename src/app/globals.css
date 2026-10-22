@@ -25,7 +25,8 @@
   --color-slate-200: #e4e6ec;
   --color-slate-300: #cdd1da;
   --color-slate-400: #989eac;
-  --color-slate-500: #6b7181;
+  /* 500 é o cinza de texto secundário: ≥ 4.5:1 sobre branco e slate-100. */
+  --color-slate-500: #5f6575;
   --color-slate-600: #4e5363;
   --color-slate-700: #363a47;
   --color-slate-800: #23252f;
@@ -74,12 +75,18 @@
 :root {
   color-scheme: light;
 }
+/*
+ * No escuro, o cinza 500 clareia para manter texto secundário legível
+ * (≥ 4.5:1 sobre slate-950 e slate-900).
+ */
 :root[data-theme="dark"] {
   color-scheme: dark;
+  --color-slate-500: #868c9c;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
+    --color-slate-500: #868c9c;
   }
 }
 
@@ -99,7 +106,15 @@ body {
 
 /* Foco sempre visível para navegação por teclado (WCAG 2.1 AA). */
 :focus-visible {
-  @apply outline-2 outline-offset-2 outline-brand-500;
+  @apply outline-2 outline-offset-2 outline-brand-600 dark:outline-brand-400;
+}
+/* Campos têm anel próprio; o contorno também aparece quando o foco vem do teclado. */
+.input:focus-visible {
+  @apply outline-2 outline-offset-1 outline-brand-600 dark:outline-brand-400;
+}
+/* Ao pular para o conteúdo, o foco cai no <main> sem desenhar contorno. */
+main:focus {
+  outline: none;
 }
 
 /* Barras de rolagem discretas. */
@@ -162,7 +177,7 @@ input[type="radio"] {
 
   /* Formulários */
   .input {
-    @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-xs transition placeholder:text-slate-400 hover:border-slate-400 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-950/60 dark:text-slate-100 dark:placeholder:text-slate-500 dark:hover:border-slate-600 dark:focus:border-brand-400;
+    @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-xs transition placeholder:text-slate-500 hover:border-slate-400 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-950/60 dark:text-slate-100 dark:placeholder:text-slate-400 dark:hover:border-slate-600 dark:focus:border-brand-400;
   }
   select.input {
     @apply cursor-pointer appearance-none bg-no-repeat pr-9;
@@ -235,6 +250,16 @@ input[type="radio"] {
   /* Estado vazio */
   .empty {
     @apply flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 px-6 py-12 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400;
+  }
+
+  /* Esqueleto de carregamento */
+  .skeleton {
+    @apply animate-pulse rounded-md bg-slate-200/80 dark:bg-slate-800/80;
+  }
+
+  /* Link "Pular para o conteúdo": só aparece com o foco do teclado. */
+  .skip-link {
+    @apply fixed top-3 left-3 z-[100] -translate-y-20 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-lift transition-transform focus:translate-y-0;
   }
 
   .alert-error {

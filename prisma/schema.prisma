@@ -139,6 +139,8 @@ model User {
   teamId       String
   // Id do usuário no Slack, para comandos e menções.
   slackUserId  String?  @unique
+  // Quando a pessoa concluiu (ou pulou) a introdução do primeiro acesso.
+  onboardedAt  DateTime?
   createdAt    DateTime @default(now())
 
   team               Team               @relation(fields: [teamId], references: [id])

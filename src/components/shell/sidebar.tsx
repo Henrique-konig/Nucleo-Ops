@@ -146,7 +146,7 @@ export function Sidebar({ items, user, signOut }: Props) {
     <>
       {/* Barra superior no celular */}
       <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-slate-200/80 bg-slate-50/80 px-4 backdrop-blur-xl lg:hidden dark:border-slate-800 dark:bg-slate-950/80">
-        <Link href="/" aria-label="Início"><Logo /></Link>
+        <Link href="/" aria-label="Plantão, ir para o início"><Logo /></Link>
         <span className="flex items-center gap-1">
         <button className="icon-btn" aria-label="Buscar" onClick={() => window.dispatchEvent(new Event(OPEN_PALETTE_EVENT))}>
           <Search className="size-5" aria-hidden />
@@ -181,7 +181,7 @@ export function Sidebar({ items, user, signOut }: Props) {
         }`}
       >
         <div className={`flex h-16 items-center ${collapsed ? "justify-center" : "justify-between px-5"}`}>
-          <Link href="/" aria-label="Início" className="rounded-lg"><Logo compact={collapsed} /></Link>
+          <Link href="/" aria-label="Plantão, ir para o início" className="rounded-lg"><Logo compact={collapsed} /></Link>
           {!collapsed && (
             <button className="icon-btn size-7" onClick={toggleCollapsed} aria-label="Recolher menu" title="Recolher menu">
               <ChevronsLeft className="size-4" aria-hidden />

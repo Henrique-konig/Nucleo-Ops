@@ -7,3 +7,6 @@ next-env.d.ts
 .env*.local
 src/generated/
 .vercel
+e2e/.auth/
+playwright-report/
+test-results/

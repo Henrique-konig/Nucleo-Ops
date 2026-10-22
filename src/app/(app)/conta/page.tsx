@@ -4,6 +4,7 @@ import { ActionForm } from "@/components/tickets/action-form";
 import { changePasswordAction } from "./actions";
 import { KeyRound } from "lucide-react";
 import { initials } from "@/lib/initials";
+import { RestartOnboardingButton } from "@/components/onboarding/restart-onboarding";
 
 export const metadata = { title: "Minha conta" };
 
@@ -21,6 +22,13 @@ export default async function AccountPage() {
           <p className="truncate text-sm text-slate-500 dark:text-slate-400">{user.email}</p>
           <span className="badge mt-1.5 bg-brand-50 text-brand-700 dark:bg-brand-950/60 dark:text-brand-300">{ROLE_LABELS[user.role]}</span>
         </div>
+      </div>
+      <div className="panel flex flex-wrap items-center justify-between gap-3 p-5">
+        <div>
+          <h2 className="section-title">Introdução</h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400">Veja de novo o tour rápido do primeiro acesso.</p>
+        </div>
+        <RestartOnboardingButton />
       </div>
       <ActionForm action={changePasswordAction} successMessage="Senha alterada." className="panel space-y-4 p-5">
         <h2 className="section-title flex items-center gap-2"><KeyRound className="size-4 text-slate-400" aria-hidden /> Trocar senha</h2>

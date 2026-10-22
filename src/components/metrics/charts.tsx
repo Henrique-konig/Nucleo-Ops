@@ -29,7 +29,7 @@ export function BarList({ title, rows, unit = "chamados", max = 8 }: { title: st
           {shown.map((r) => (
             <li key={r.label} className="grid grid-cols-[8rem_1fr_2.5rem] items-center gap-2 text-sm">
               <span className="truncate" title={r.label}>{r.label}</span>
-              <span className="group relative h-2.5 rounded-full bg-slate-100 dark:bg-slate-800/70" tabIndex={0} aria-label={`${r.label}: ${r.value} ${unit}`}>
+              <span className="group relative h-2.5 rounded-full bg-slate-100 dark:bg-slate-800/70" role="img" tabIndex={0} aria-label={`${r.label}: ${r.value} ${unit}`}>
                 <span className="block h-full rounded-full transition-all duration-700" style={{ width: `${Math.max(2, (r.value / top) * 100)}%`, background: "var(--series-1)" }} />
                 <span role="tooltip" className="pointer-events-none absolute -top-8 left-0 z-10 hidden whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-xs text-white shadow-lift group-hover:block group-focus:block dark:bg-slate-100 dark:text-slate-900">
                   {r.label}: {r.value} {unit}
@@ -59,7 +59,7 @@ export function DailyColumns({ title, rows }: { title: string; rows: Breakdown }
       </figcaption>
       <div className="relative flex h-40 items-end gap-[2px] border-b" style={{ borderColor: "var(--chart-grid)" }}>
         {rows.map((r) => (
-          <div key={r.label} className="group relative flex h-full flex-1 items-end" tabIndex={0} aria-label={`${fmt(r.label)}: ${r.value} chamados`}>
+          <div key={r.label} className="group relative flex h-full flex-1 items-end" role="img" tabIndex={0} aria-label={`${fmt(r.label)}: ${r.value} chamados`}>
             <div className="w-full rounded-t-[4px] transition-opacity group-hover:opacity-75" style={{ height: `${(r.value / top) * 100}%`, minHeight: r.value > 0 ? 2 : 0, background: "var(--series-1)" }} />
             <span role="tooltip" className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-xs text-white shadow-lift group-hover:block group-focus:block dark:bg-slate-100 dark:text-slate-900">
               {fmt(r.label)}: {r.value}

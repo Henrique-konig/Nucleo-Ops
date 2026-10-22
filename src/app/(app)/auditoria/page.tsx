@@ -5,8 +5,9 @@ import { auditFiltersSchema, auditPeople, queryAudit } from "@/lib/audit-log";
 import { actionLabel, TARGET_LABELS } from "@/lib/audit-labels";
 import { AGENT_LABELS } from "@/lib/admin";
 import { formatDateTime } from "@/components/tickets/badges";
-import { ChevronLeft, ChevronRight, FileDown, FileSpreadsheet, SlidersHorizontal } from "lucide-react";
-import { PageHeader } from "@/components/ui/page-header";
+import { FileDown, FileSpreadsheet, ShieldCheck, SlidersHorizontal } from "lucide-react";
+import { EmptyState, PageHeader } from "@/components/ui/page-header";
+import { Pagination, pageHref } from "@/components/ui/pagination";
 
 export const metadata = { title: "Auditoria" };
 
@@ -77,6 +78,15 @@ export default async function AuditPage({ searchParams }: PageProps<"/auditoria"
         <button className="btn-primary py-1.5"><SlidersHorizontal className="size-4" aria-hidden /> Filtrar</button>
       </form>
 
+      {rows.length === 0 ? (
+        <EmptyState
+          icon={<ShieldCheck className="size-5" />}
+          title="Nenhum registro encontrado"
+          action={<Link href="/auditoria" className="btn">Limpar filtros</Link>}
+        >
+          Nenhuma ação corresponde a esses filtros. Amplie o período ou remova algum critério.
+        </EmptyState>
+      ) : (
       <div className="table-wrap">
         <table className="data-table">
           <thead>
@@ -115,13 +125,8 @@ export default async function AuditPage({ searchParams }: PageProps<"/auditoria"
           </tbody>
         </table>
       </div>
-      <nav aria-label="Páginas" className="flex items-center justify-between gap-3 text-sm">
-        <span className="text-slate-500 dark:text-slate-400">Página {filters.page} de {pages}</span>
-        <span className="flex gap-2">
-          {filters.page > 1 && <Link className="btn" href={`/auditoria?${qs(filters.page - 1)}`}><ChevronLeft className="size-4" aria-hidden /> Anterior</Link>}
-          {filters.page < pages && <Link className="btn" href={`/auditoria?${qs(filters.page + 1)}`}>Próxima <ChevronRight className="size-4" aria-hidden /></Link>}
-        </span>
-      </nav>
+      )}
+      <Pagination page={filters.page} pages={pages} total={total} noun={["registro", "registros"]} href={(p) => pageHref("/auditoria", raw, p)} />
     </main>
   );
 }

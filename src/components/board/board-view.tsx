@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bot, CalendarClock, Check, CheckSquare, ChevronDown, GripVertical, LayoutGrid, MoreHorizontal, Plus, Radio, Ticket, X } from "lucide-react";
+import { Bot, CalendarClock, Check, CheckSquare, ChevronDown, GripVertical, LayoutGrid, Loader2, MoreHorizontal, Plus, Radio, Ticket, X } from "lucide-react";
 import type { BoardCard, BoardData, SavedFilterItem } from "@/lib/boards";
 import * as actions from "@/app/(app)/boards/[boardId]/actions";
 import { CardDialog } from "./card-dialog";
@@ -12,6 +12,7 @@ import { initials } from "@/lib/initials";
 import { isFilterActive, matchesFilter, type BoardFilter } from "@/lib/board-filters";
 import { accent } from "@/components/ui/accent";
 import { COLUMN_ACCENTS, LABEL_COLORS, type AgentOption, type BoardOption, type LabelOption, type MemberOption } from "./shared";
+import { useTouchDrag, type DropTarget } from "./use-touch-drag";
 
 export type BoardPermissions = {
   createCard: boolean;
@@ -35,6 +36,17 @@ type Props = {
   initialCardId: string | null;
   permissions: BoardPermissions;
 };
+
+/** Cartões renderizados por coluna antes do botão "Mostrar mais", para colunas longas não travarem a página. */
+const CARDS_PER_PAGE = 40;
+
+/** Cartão provisório, mostrado enquanto o servidor cria o de verdade. */
+function pendingCard(columnId: string, title: string): BoardCard {
+  return {
+    id: `pending-${crypto.randomUUID()}`, title, columnId, description: null, dueDate: null,
+    assignee: null, labels: [], checklist: [], ticket: null, links: [],
+  } as unknown as BoardCard;
+}
 
 /** Move o cartão localmente, para a interface responder antes do servidor. */
 function moveLocally(columns: Column[], cardId: string, toColumnId: string, toIndex: number): Column[] {
@@ -63,7 +75,10 @@ export function BoardView({ board, boards, members, labels, agents, savedFilters
   const [filter, setFilter] = useState<BoardFilter>({});
   const [saved, setSaved] = useState(savedFilters);
   const [dragging, setDragging] = useState<string | null>(null);
-  const [dropTarget, setDropTarget] = useState<{ columnId: string; index: number } | null>(null);
+  const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
+  const [shown, setShown] = useState<Record<string, number>>({});
+  const [activeColumn, setActiveColumn] = useState(0);
+  const scrollerRef = useRef<HTMLDivElement>(null);
   const [live, setLive] = useState<"connecting" | "online" | "offline">("connecting");
   const [, startTransition] = useTransition();
 
@@ -120,6 +135,43 @@ export function BoardView({ board, boards, members, labels, agents, savedFilters
     startTransition(async () => {
       report(await actions.moveCard({ cardId, toColumnId, toIndex: index }));
     });
+  }
+
+  // Criação otimista: o cartão aparece na hora e some se o servidor recusar.
+  async function createCard(columnId: string, title: string) {
+    const temp = pendingCard(columnId, title.trim());
+    setColumns((cols) => cols.map((c) => (c.id === columnId ? { ...c, cards: [...c.cards, temp] } : c)));
+    const result = await actions.createCard({ boardId: board.id, columnId, title });
+    if (!result.ok) setColumns((cols) => cols.map((c) => ({ ...c, cards: c.cards.filter((card) => card.id !== temp.id) })));
+    return report(result);
+  }
+
+  useTouchDrag({
+    containerRef: scrollerRef,
+    enabled: permissions.moveCard,
+    onStart: setDragging,
+    onOver: setDropTarget,
+    onDrop: (cardId, target) => {
+      setDragging(null);
+      setDropTarget(null);
+      if (target) move(cardId, target.columnId, realIndex(target.columnId, target.index));
+    },
+    onCancel: () => {
+      setDragging(null);
+      setDropTarget(null);
+    },
+  });
+
+  // No celular cada coluna ocupa quase a tela; os marcadores mostram em qual delas a pessoa está.
+  function onScroll() {
+    const el = scrollerRef.current;
+    const first = el?.querySelector<HTMLElement>("[data-column-id]");
+    if (!el || !first) return;
+    setActiveColumn(Math.round(el.scrollLeft / (first.offsetWidth + 16)));
+  }
+  function scrollToColumn(index: number) {
+    const el = scrollerRef.current?.querySelectorAll<HTMLElement>("[data-column-id]")[index];
+    el?.scrollIntoView({ behavior: "smooth", inline: "start", block: "nearest" });
   }
 
   function onCardKeyDown(e: React.KeyboardEvent, card: BoardCard, columnIndex: number, cardIndex: number) {
@@ -212,13 +264,38 @@ export function BoardView({ board, boards, members, labels, agents, savedFilters
         </p>
       )}
 
-      <div className="flex flex-1 snap-x gap-4 overflow-x-auto px-4 pb-6 sm:px-6 lg:px-8">
+      {visibleColumns.length > 1 && (
+        <nav aria-label="Colunas" className="-mt-2 mb-3 flex gap-1.5 overflow-x-auto px-4 sm:hidden">
+          {visibleColumns.map((column, i) => (
+            <button
+              key={column.id}
+              type="button"
+              aria-current={i === activeColumn ? "true" : undefined}
+              onClick={() => scrollToColumn(i)}
+              className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition ${
+                i === activeColumn
+                  ? "bg-brand-600 text-white dark:bg-brand-500"
+                  : "bg-slate-200/70 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+              }`}
+            >
+              {column.name} <span className="tabular-nums opacity-75">{column.cards.length}</span>
+            </button>
+          ))}
+        </nav>
+      )}
+
+      <div
+        ref={scrollerRef}
+        onScroll={onScroll}
+        className="flex flex-1 snap-x snap-mandatory scroll-px-4 gap-4 overflow-x-auto overscroll-x-contain px-4 pb-6 sm:snap-proximity sm:scroll-px-6 sm:px-6 lg:px-8"
+      >
         {visibleColumns.map((column, columnIndex) => (
           <section
             key={column.id}
+            data-column-id={column.id}
             aria-labelledby={`column-${column.id}`}
             style={{ animationDelay: `${columnIndex * 50}ms` }}
-            className={`flex w-[19rem] shrink-0 animate-rise snap-start flex-col rounded-2xl border transition-colors duration-200 ${
+            className={`flex w-[85vw] max-w-[19rem] shrink-0 animate-rise snap-start flex-col rounded-2xl border transition-colors duration-200 sm:w-[19rem] ${
               dragging && dropTarget?.columnId === column.id
                 ? "border-brand-300 bg-brand-50/60 dark:border-brand-800 dark:bg-brand-950/30"
                 : "border-slate-200/70 bg-slate-100/70 dark:border-slate-800/70 dark:bg-slate-900/40"
@@ -241,7 +318,7 @@ export function BoardView({ board, boards, members, labels, agents, savedFilters
             />
 
             <ol className="flex min-h-16 flex-1 flex-col gap-2 overflow-y-auto px-2.5 pt-0.5 pb-2.5">
-              {column.cards.map((card, cardIndex) => (
+              {column.cards.slice(0, shown[column.id] ?? CARDS_PER_PAGE).map((card, cardIndex) => (
                 <li
                   key={card.id}
                   onDragOver={(e) => {
@@ -260,10 +337,13 @@ export function BoardView({ board, boards, members, labels, agents, savedFilters
                   {dropTarget?.columnId === column.id && dropTarget.index === cardIndex && <DropIndicator />}
                   <div
                     id={`card-${card.id}`}
+                    data-card-id={card.id}
+                    data-pending={card.id.startsWith("pending-") || undefined}
                     role="button"
-                    tabIndex={0}
+                    tabIndex={card.id.startsWith("pending-") ? -1 : 0}
+                    aria-disabled={card.id.startsWith("pending-") || undefined}
                     aria-describedby={permissions.moveCard ? "board-help" : undefined}
-                    draggable={permissions.moveCard}
+                    draggable={permissions.moveCard && !card.id.startsWith("pending-")}
                     onDragStart={(e) => {
                       e.dataTransfer.setData("text/plain", card.id);
                       e.dataTransfer.effectAllowed = "move";
@@ -273,26 +353,42 @@ export function BoardView({ board, boards, members, labels, agents, savedFilters
                       setDragging(null);
                       setDropTarget(null);
                     }}
-                    onClick={() => setOpenCardId(card.id)}
-                    onKeyDown={(e) => onCardKeyDown(e, card, columnIndex, cardIndex)}
-                    className={`group relative cursor-pointer overflow-hidden rounded-xl border border-slate-200/80 bg-white p-3 text-sm shadow-card transition duration-200 hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-lift active:cursor-grabbing dark:border-slate-700/60 dark:bg-slate-800/70 dark:hover:border-brand-700 ${
+                    onClick={() => !card.id.startsWith("pending-") && setOpenCardId(card.id)}
+                    onKeyDown={(e) => !card.id.startsWith("pending-") && onCardKeyDown(e, card, columnIndex, cardIndex)}
+                    className={`group relative cursor-pointer overflow-hidden rounded-xl border border-slate-200/80 bg-white p-3 text-sm shadow-card transition duration-200 select-none [-webkit-touch-callout:none] hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-lift active:cursor-grabbing dark:border-slate-700/60 dark:bg-slate-800/70 dark:hover:border-brand-700 ${
                       dragging === card.id ? "scale-[0.97] rotate-1 opacity-40" : ""
-                    }`}
+                    } ${card.id.startsWith("pending-") ? "pointer-events-none opacity-70" : ""}`}
                   >
                     <CardSummary card={card} draggable={permissions.moveCard} />
+                    {card.id.startsWith("pending-") && (
+                      <span className="mt-2 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                        <Loader2 className="size-3.5 animate-spin" aria-hidden /> Salvando…
+                      </span>
+                    )}
                   </div>
                   {dropTarget?.columnId === column.id && dropTarget.index === cardIndex + 1 && cardIndex === column.cards.length - 1 && <DropIndicator />}
                 </li>
               ))}
+              {column.cards.length > (shown[column.id] ?? CARDS_PER_PAGE) && (
+                <li>
+                  <button
+                    type="button"
+                    className="btn-ghost w-full text-xs"
+                    onClick={() => setShown((v) => ({ ...v, [column.id]: (v[column.id] ?? CARDS_PER_PAGE) + CARDS_PER_PAGE }))}
+                  >
+                    <ChevronDown className="size-3.5" aria-hidden /> Mostrar mais {Math.min(CARDS_PER_PAGE, column.cards.length - (shown[column.id] ?? CARDS_PER_PAGE))} de {column.cards.length - (shown[column.id] ?? CARDS_PER_PAGE)} restantes
+                  </button>
+                </li>
+              )}
               {column.cards.length === 0 && dropTarget?.columnId === column.id && <DropIndicator />}
               {column.cards.length === 0 && dropTarget?.columnId !== column.id && (
-                <li className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-slate-300/80 px-3 py-8 text-center text-xs text-slate-400 dark:border-slate-700/70 dark:text-slate-500">
-                  {filtering ? "Nenhum cartão neste filtro" : permissions.moveCard ? "Arraste cartões para cá" : "Nenhum cartão"}
+                <li className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-slate-300/80 px-3 py-8 text-center text-xs text-slate-500 dark:border-slate-700/70 dark:text-slate-400">
+                  {filtering ? "Nenhum cartão neste filtro" : permissions.moveCard ? "Nenhum cartão aqui. Arraste um cartão para esta coluna." : "Nenhum cartão nesta coluna"}
                 </li>
               )}
             </ol>
 
-            {permissions.createCard && <NewCardForm boardId={board.id} columnId={column.id} onResult={report} />}
+            {permissions.createCard && <NewCardForm columnId={column.id} onCreate={createCard} />}
           </section>
         ))}
 
@@ -505,9 +601,8 @@ function ColumnHeader({
   );
 }
 
-function NewCardForm({ boardId, columnId, onResult }: { boardId: string; columnId: string; onResult: (r: actions.ActionResult<unknown>) => boolean }) {
+function NewCardForm({ columnId, onCreate }: { columnId: string; onCreate: (columnId: string, title: string) => Promise<boolean> }) {
   const [open, setOpen] = useState(false);
-  const [pending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
 
   if (!open) {
@@ -524,11 +619,14 @@ function NewCardForm({ boardId, columnId, onResult }: { boardId: string; columnI
     <form
       ref={formRef}
       className="animate-rise space-y-2 px-2.5 pb-2.5"
-      action={(fd) =>
-        startTransition(async () => {
-          if (onResult(await actions.createCard({ boardId, columnId, title: String(fd.get("title")) }))) formRef.current?.reset();
-        })
-      }
+      onSubmit={(e) => {
+        e.preventDefault();
+        const title = String(new FormData(e.currentTarget).get("title") ?? "");
+        if (!title.trim()) return;
+        // O formulário limpa na hora para a próxima digitação; o cartão aparece como "Salvando…".
+        formRef.current?.reset();
+        void onCreate(columnId, title);
+      }}
     >
       <label className="sr-only" htmlFor={`new-card-${columnId}`}>Título do cartão</label>
       <textarea
@@ -548,7 +646,7 @@ function NewCardForm({ boardId, columnId, onResult }: { boardId: string; columnI
         }}
       />
       <div className="flex gap-2">
-        <button className="btn-primary py-1.5" disabled={pending}>Adicionar</button>
+        <button className="btn-primary py-1.5">Adicionar</button>
         <button type="button" className="btn-ghost" onClick={() => setOpen(false)}>Cancelar</button>
       </div>
     </form>

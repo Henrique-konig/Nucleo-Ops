@@ -2,8 +2,9 @@ import Link from "next/link";
 import { FileDown, FileSpreadsheet, Inbox, Search, SlidersHorizontal } from "lucide-react";
 import { can } from "@/lib/permissions";
 import { EmptyState, PageHeader } from "@/components/ui/page-header";
+import { Pagination, pageHref } from "@/components/ui/pagination";
 import { requireUser } from "@/lib/session";
-import { CHANNEL_LABELS, listTickets, PRIORITY_LABELS, STATUS_LABELS, ticketFiltersSchema } from "@/lib/tickets";
+import { CHANNEL_LABELS, listTicketsPage, PRIORITY_LABELS, STATUS_LABELS, ticketFiltersSchema } from "@/lib/tickets";
 import { db } from "@/lib/db";
 import { PriorityBadge, StatusBadge, formatDateTime } from "@/components/tickets/badges";
 
@@ -11,11 +12,12 @@ export const metadata = { title: "Chamados" };
 
 export default async function TicketsPage({ searchParams }: PageProps<"/chamados">) {
   const user = await requireUser("board:view");
-  const raw = await searchParams;
-  const parsed = ticketFiltersSchema.safeParse(Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, Array.isArray(v) ? v[0] : v || undefined])));
+  const raw = Object.fromEntries(Object.entries(await searchParams).map(([k, v]) => [k, (Array.isArray(v) ? v[0] : v) || undefined]));
+  const parsed = ticketFiltersSchema.safeParse(raw);
   const filters = parsed.success ? parsed.data : {};
-  const [tickets, team] = await Promise.all([
-    listTickets(user, { status: "ACTIVE", ...filters }),
+  const filtered = Boolean(filters.q || filters.priority || filters.category || filters.mine || (filters.status && filters.status !== "ACTIVE"));
+  const [{ rows: tickets, total, page, pages }, team] = await Promise.all([
+    listTicketsPage(user, { status: "ACTIVE", ...filters }, Number(raw.page ?? 1)),
     db.team.findUniqueOrThrow({ where: { id: user.teamId }, select: { categories: true } }),
   ]);
   // A exportação leva os mesmos filtros da tela.
@@ -26,7 +28,7 @@ export default async function TicketsPage({ searchParams }: PageProps<"/chamados
     <main className="mx-auto max-w-6xl space-y-6 px-4 py-8 sm:px-6 lg:px-10 lg:py-10">
       <PageHeader
         title="Chamados"
-        description={`${tickets.length} ${tickets.length === 1 ? "chamado encontrado" : "chamados encontrados"}`}
+        description={`${total} ${total === 1 ? "chamado encontrado" : "chamados encontrados"}`}
         actions={can(user.role, "ticket:export") && (
           <>
             <a className="btn" href={`/api/chamados/exportar?${exportQs("csv")}`}><FileSpreadsheet className="size-4" aria-hidden /> Exportar CSV</a>
@@ -70,9 +72,19 @@ export default async function TicketsPage({ searchParams }: PageProps<"/chamados
       </form>
 
       {tickets.length === 0 ? (
-        <EmptyState icon={<Inbox className="size-5" />} title="Nenhum chamado encontrado">
-          Ajuste os filtros ou aguarde novos chamados chegarem pelos canais de entrada.
-        </EmptyState>
+        filtered ? (
+          <EmptyState
+            icon={<Search className="size-5" />}
+            title="Nenhum chamado com esses filtros"
+            action={<Link href="/chamados" className="btn">Limpar filtros</Link>}
+          >
+            Tente outro termo de busca ou remova algum filtro.
+          </EmptyState>
+        ) : (
+          <EmptyState icon={<Inbox className="size-5" />} title="Fila em dia: nenhum chamado em aberto">
+            Novos chamados chegam pelo portal, e-mail, chat, Slack ou webhook e aparecem aqui assim que forem abertos.
+          </EmptyState>
+        )
       ) : (
         <div className="table-wrap">
           <table className="data-table">
@@ -106,6 +118,7 @@ export default async function TicketsPage({ searchParams }: PageProps<"/chamados
           </table>
         </div>
       )}
+      <Pagination page={page} pages={pages} total={total} noun={["chamado", "chamados"]} href={(p) => pageHref("/chamados", raw, p)} />
     </main>
   );
 }

@@ -14,7 +14,7 @@ export function PageHeader({ title, description, actions, id }: { title: ReactNo
 }
 
 /** Estado vazio com ícone, título e texto de apoio. */
-export function EmptyState({ icon, title, children }: { icon?: ReactNode; title: ReactNode; children?: ReactNode }) {
+export function EmptyState({ icon, title, children, action }: { icon?: ReactNode; title: ReactNode; children?: ReactNode; action?: ReactNode }) {
   return (
     <div className="empty">
       {icon && (
@@ -24,6 +24,7 @@ export function EmptyState({ icon, title, children }: { icon?: ReactNode; title:
       )}
       <p className="font-medium text-slate-700 dark:text-slate-200">{title}</p>
       {children && <div className="max-w-sm">{children}</div>}
+      {action && <div className="mt-2 flex flex-wrap justify-center gap-2">{action}</div>}
     </div>
   );
 }

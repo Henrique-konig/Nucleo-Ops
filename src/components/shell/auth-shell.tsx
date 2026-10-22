@@ -39,7 +39,7 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
             ))}
           </ul>
         </div>
-        <p className="relative text-xs text-slate-500">Plantão · Central de operações para TI</p>
+        <p className="relative text-xs text-slate-400">Plantão · Central de operações para TI</p>
       </section>
       <section className="flex items-center justify-center p-6 sm:p-10">
         <div className="w-full max-w-sm animate-rise">
