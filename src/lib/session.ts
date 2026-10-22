@@ -1,4 +1,5 @@
 import "server-only";
+import * as Sentry from "@sentry/nextjs";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
@@ -13,9 +14,13 @@ export async function currentUser() {
   if (!session?.user?.id) return null;
   const user = await db.user.findUnique({
     where: { id: session.user.id },
-    select: { id: true, name: true, email: true, role: true, teamId: true, active: true },
+    select: { id: true, name: true, email: true, role: true, teamId: true, active: true, onboardedAt: true },
   });
-  return user?.active ? user : null;
+  if (!user?.active) return null;
+  // Erros enviados ao monitoramento levam só o id e o papel, sem dados pessoais.
+  Sentry.setUser({ id: user.id });
+  Sentry.setTag("role", user.role);
+  return user;
 }
 
 export type CurrentUser = NonNullable<Awaited<ReturnType<typeof currentUser>>>;

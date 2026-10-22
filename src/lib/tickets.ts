@@ -225,6 +225,20 @@ export async function listTickets(actor: Actor, filters: z.infer<typeof ticketFi
   return db.ticket.findMany({ where: ticketWhere(actor, filters), select: ticketListSelect, orderBy: [{ createdAt: "desc" }], take: 200 });
 }
 
+export const TICKETS_PAGE_SIZE = 25;
+
+/** Fila de chamados paginada, com o total para a navegação entre páginas. */
+export async function listTicketsPage(actor: Actor, filters: z.infer<typeof ticketFiltersSchema>, page: number) {
+  assertCan(actor.role, "board:view");
+  const where = ticketWhere(actor, filters);
+  const current = Math.max(1, Math.floor(page) || 1);
+  const [rows, total] = await Promise.all([
+    db.ticket.findMany({ where, select: ticketListSelect, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip: (current - 1) * TICKETS_PAGE_SIZE, take: TICKETS_PAGE_SIZE }),
+    db.ticket.count({ where }),
+  ]);
+  return { rows, total, page: current, pages: Math.max(1, Math.ceil(total / TICKETS_PAGE_SIZE)) };
+}
+
 export async function listRequesterTickets(userId: string) {
   return db.ticket.findMany({
     // Conversa em andamento com o assistente aparece no chat, não na lista.

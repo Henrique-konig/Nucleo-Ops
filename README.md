@@ -240,6 +240,39 @@ Formato do webhook genérico:
 | `npm test` | Testes; os de integração rodam quando `DATABASE_URL` está definida |
 | `npm run db:migrate` | Cria e aplica migrações em desenvolvimento |
 | `npm run db:seed` | Dados iniciais (idempotente) |
+| `npm run test:e2e` | Testes de ponta a ponta (Playwright) contra o build; rode `build` e `db:seed` antes |
+
+## Testes de ponta a ponta
+
+Os testes em `e2e/` sobem o build de produção (`next start`, porta 3100) e usam os usuários
+do seed. Cobrem login, quadro (criação otimista, mover pelo teclado), arrastar com toque no
+celular, estados vazios, páginas de erro, introdução do primeiro acesso e acessibilidade com o
+axe (WCAG 2.1 AA, nos temas claro e escuro). No CI eles rodam no job `e2e`; quando falham, o
+relatório e os traces ficam nos artefatos do job.
+
+```bash
+npx playwright install chromium   # uma vez
+npm run build && npm run db:seed
+npm run test:e2e
+```
+
+## Monitoramento de erros (Sentry)
+
+Erros do navegador, de server components, rotas e server actions vão para o Sentry quando
+`SENTRY_DSN` e `NEXT_PUBLIC_SENTRY_DSN` estão definidas; sem elas o SDK fica desligado. Os
+eventos levam só o id e o papel do usuário (sem e-mail ou IP) e passam pela rota `/monitoring`
+do próprio app, para não serem barrados por bloqueadores de anúncio. Com `SENTRY_AUTH_TOKEN`,
+`SENTRY_ORG` e `SENTRY_PROJECT`, o build envia os source maps. Quando uma ação falha por erro
+inesperado, a mensagem mostra o código do evento para a pessoa repassar à equipe.
+
+## Acessibilidade, carregamento e celular
+
+- Foco sempre visível, link "Pular para o conteúdo" e cinzas de texto com contraste ≥ 4,5:1 nos dois temas.
+- Quadro pelo teclado: <kbd>Tab</kbd> até o cartão, <kbd>Alt</kbd> + setas para mover, <kbd>Enter</kbd> para abrir.
+- Esqueletos de carregamento nas páginas, fila de chamados e auditoria paginadas, colunas longas do quadro em blocos.
+- Criar e mover cartões atualiza a tela na hora e desfaz se o servidor recusar.
+- No celular, cada coluna ocupa quase a tela, com encaixe ao rolar e atalhos para as colunas; segure um cartão para arrastá-lo (o quadro rola sozinho perto das bordas).
+- Introdução no primeiro acesso, por papel; pode ser revista em **Minha conta**.
 
 ## Decisões tomadas para as questões em aberto
 

@@ -31,9 +31,23 @@ export default async function KnowledgePage({ searchParams }: PageProps<"/base">
         <button className="btn">Buscar</button>
       </form>
       {docs.length === 0 ? (
-        <EmptyState icon={<BookOpen className="size-5" />} title="Nenhum documento">
-          Os agentes só respondem tão bem quanto a base. Que tal escrever o primeiro?
-        </EmptyState>
+        q || vencidos === "1" ? (
+          <EmptyState
+            icon={<Search className="size-5" />}
+            title={q ? `Nada encontrado para “${q}”` : "Nenhum documento vencido"}
+            action={<Link href="/base" className="btn">Ver todos os documentos</Link>}
+          >
+            {q ? "Tente outras palavras, ou escreva um documento sobre o assunto." : "Todos os documentos estão dentro da validade."}
+          </EmptyState>
+        ) : (
+          <EmptyState
+            icon={<BookOpen className="size-5" />}
+            title="Nenhum documento ainda"
+            action={can(user.role, "kb:edit") && <Link href="/base/novo" className="btn-primary"><Plus className="size-4" aria-hidden /> Escrever o primeiro</Link>}
+          >
+            Os agentes só respondem tão bem quanto a base. Comece pelos problemas que mais chegam à equipe.
+          </EmptyState>
+        )
       ) : (
         <ul className="panel divide-y divide-slate-100 overflow-hidden dark:divide-slate-800">
           {docs.map((d) => {
