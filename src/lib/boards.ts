@@ -19,6 +19,7 @@ const cardInclude = {
   labels: { select: { id: true, name: true, color: true }, orderBy: { name: "asc" } },
   checklist: { select: { id: true, text: true, done: true, position: true }, orderBy: { position: "asc" } },
   ticket: { select: { id: true, priority: true, status: true, channel: true } },
+  links: { select: { id: true, url: true, title: true, state: true, provider: true }, orderBy: { updatedAt: "desc" } },
 } satisfies Prisma.CardInclude;
 
 export async function getBoard(actor: Actor, boardId: string) {

@@ -8,6 +8,8 @@ const NAV: { href: string; label: string; permission: Permission; exclude?: Perm
   { href: "/chamados", label: "Chamados", permission: "board:view" },
   { href: "/base", label: "Base de conhecimento", permission: "board:view" },
   { href: "/execucoes", label: "Execuções", permission: "execution:view" },
+  { href: "/indicadores", label: "Indicadores", permission: "metrics:view" },
+  { href: "/relatorios", label: "Relatórios", permission: "metrics:view" },
   { href: "/auditoria", label: "Auditoria", permission: "audit:view" },
   { href: "/admin", label: "Administração", permission: "automation:configure" },
 ];
