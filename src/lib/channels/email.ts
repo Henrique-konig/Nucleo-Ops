@@ -8,8 +8,23 @@ export type OutgoingEmail = {
   inReplyTo?: string;
 };
 
+/** O que o envio precisa: a integração de e-mail da equipe serve, e as variáveis de ambiente também. */
+export type OutgoingEmailConfig = Pick<IntegrationConfig<"EMAIL">, "provider" | "apiKey" | "from">;
+
+/**
+ * Envio configurado só por variáveis de ambiente, para quem não cadastrou a
+ * integração de e-mail: RESEND_API_KEY + EMAIL_FROM. Só EMAIL_FROM (sem chave)
+ * registra no console, útil em desenvolvimento.
+ */
+export function emailConfigFromEnv(env: Record<string, string | undefined> = process.env): OutgoingEmailConfig | null {
+  const from = env.EMAIL_FROM?.trim();
+  if (!from) return null;
+  const apiKey = env.RESEND_API_KEY?.trim();
+  return apiKey ? { provider: "resend", apiKey, from } : { provider: "log", from };
+}
+
 /** Envia um e-mail pelo provedor configurado. Com provider "log", só registra no console. */
-export async function sendEmail(config: IntegrationConfig<"EMAIL">, email: OutgoingEmail): Promise<{ id?: string }> {
+export async function sendEmail(config: OutgoingEmailConfig, email: OutgoingEmail): Promise<{ id?: string }> {
   if (config.provider === "log") {
     console.info(`[email] para ${email.to}: ${email.subject}\n${email.text}`);
     return {};

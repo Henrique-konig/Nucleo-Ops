@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { recordAction } from "@/lib/audit";
 import { assertCan } from "@/lib/permissions";
+import { enqueue } from "@/lib/jobs/queue";
 import { needsRebalance, positionAt, rebalanced } from "@/lib/ordering";
 import type { Prisma } from "@/generated/prisma/client";
 import { BusinessError, NotFoundError, type Actor } from "@/lib/errors";
@@ -277,6 +278,10 @@ export async function updateCard(actor: Actor, input: Input<"updateCard">) {
     }
     // Agente recém-atribuído começa a trabalhar no cartão.
     if (agentToRun) await queueAgentRun(tx, { teamId: actor.teamId, agentId: agentToRun, cardId: card.id, requestedById: actor.id });
+    // Novo responsável (que não seja quem atribuiu) recebe aviso por e-mail.
+    if (changes.assigneeId && fields.assigneeId && fields.assigneeId !== actor.id) {
+      await enqueue(tx, { teamId: actor.teamId, type: "notify.assignee", payload: { cardId: card.id, assigneeId: fields.assigneeId, byUserId: actor.id } });
+    }
     return updated;
   });
 }

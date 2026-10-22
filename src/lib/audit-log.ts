@@ -4,12 +4,19 @@ import { db } from "@/lib/db";
 import { assertCan } from "@/lib/permissions";
 import type { Actor } from "@/lib/errors";
 import type { Prisma } from "@/generated/prisma/client";
+import { actionLabel, TARGET_LABELS } from "@/lib/audit-labels";
+import { AGENT_LABELS } from "@/lib/admin";
+import { toCsv } from "@/lib/export/csv";
+import { renderTablePdf } from "@/lib/export/pdf";
 
 // Consulta do log de auditoria (somente leitura): quem ou qual agente fez o quê.
 
 export const auditFiltersSchema = z.object({
   actor: z.enum(["user", "agent"]).optional(),
+  // Pessoa específica (id do usuário).
+  user: z.string().max(64).optional(),
   type: z.string().max(60).optional(),
+  targetType: z.string().max(40).optional(),
   target: z.string().max(64).optional(),
   from: z.coerce.date().optional(),
   to: z.coerce.date().optional(),
@@ -25,7 +32,9 @@ function where(actor: Actor, f: AuditFilters): Prisma.ActionWhereInput {
     teamId: actor.teamId,
     ...(f.actor === "user" && { userId: { not: null } }),
     ...(f.actor === "agent" && { agentId: { not: null } }),
+    ...(f.user && { userId: f.user }),
     ...(f.type && { type: { startsWith: f.type } }),
+    ...(f.targetType && { targetType: f.targetType }),
     ...(f.target && { targetId: f.target }),
     ...((f.from || f.to) && { createdAt: { ...(f.from && { gte: f.from }), ...(f.to && { lt: new Date(f.to.getTime() + 86_400_000) }) } }),
   };
@@ -47,29 +56,63 @@ export async function queryAudit(actor: Actor, filters: AuditFilters) {
   return { rows, total, pages: Math.max(1, Math.ceil(total / PAGE_SIZE)) };
 }
 
-function csvCell(value: unknown): string {
-  const text = value == null ? "" : typeof value === "string" ? value : JSON.stringify(value);
-  // Evita fórmulas ao abrir em planilhas.
-  const safe = /^[=+\-@]/.test(text) ? `'${text}` : text;
-  return `"${safe.replace(/"/g, '""')}"`;
+/** Pessoas que aparecem no filtro "Quem" (toda a equipe, inclusive desativados). */
+export async function auditPeople(actor: Actor) {
+  assertCan(actor.role, "audit:view");
+  return db.user.findMany({ where: { teamId: actor.teamId }, select: { id: true, name: true, active: true }, orderBy: { name: "asc" } });
 }
+
+const MAX_EXPORT = 50_000;
+const MAX_PDF = 5_000;
+
+type AuditRow = Prisma.ActionGetPayload<{ include: typeof include }>;
+
+const who = (r: AuditRow) => (r.user ? r.user.name : `Agente ${r.agent ? AGENT_LABELS[r.agent.type] : ""}`);
 
 export async function exportAuditCsv(actor: Actor, filters: AuditFilters) {
   assertCan(actor.role, "audit:view");
-  const rows = await db.action.findMany({ where: where(actor, filters), include, orderBy: { createdAt: "desc" }, take: 50_000 });
-  const header = ["data", "autor", "tipo_autor", "acao", "alvo", "id_alvo", "confirmado_por", "detalhes", "resultado"];
-  const lines = rows.map((r) =>
-    [
+  const rows = await db.action.findMany({ where: where(actor, filters), include, orderBy: { createdAt: "desc" }, take: MAX_EXPORT });
+  return toCsv(
+    ["data", "autor", "tipo_autor", "acao", "descricao", "alvo", "id_alvo", "confirmado_por", "detalhes", "resultado"],
+    rows.map((r) => [
       r.createdAt.toISOString(),
       r.user ? `${r.user.name} <${r.user.email}>` : `agente ${r.agent?.type}`,
       r.userId ? "usuario" : "agente",
       r.type,
+      actionLabel(r.type),
       r.targetType,
       r.targetId,
       r.confirmedBy?.name,
       r.payload,
       r.result,
-    ].map(csvCell).join(","),
+    ]),
   );
-  return [header.join(","), ...lines].join("\n");
+}
+
+export async function exportAuditPdf(actor: Actor, filters: AuditFilters) {
+  assertCan(actor.role, "audit:view");
+  const rows = await db.action.findMany({ where: where(actor, filters), include, orderBy: { createdAt: "desc" }, take: MAX_PDF });
+  const fmt = (d: Date) => d.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "medium" });
+  const period = filters.from || filters.to
+    ? `de ${filters.from ? filters.from.toLocaleDateString("pt-BR", { timeZone: "UTC" }) : "início"} até ${filters.to ? filters.to.toLocaleDateString("pt-BR", { timeZone: "UTC" }) : "hoje"}`
+    : "todo o período";
+  return renderTablePdf({
+    title: "Log de auditoria",
+    subtitle: `${rows.length} registros · ${period}${rows.length === MAX_PDF ? ` · limitado aos ${MAX_PDF} mais recentes (use o CSV para tudo)` : ""}`,
+    columns: [
+      { header: "Quando", width: 12 },
+      { header: "Quem", width: 15 },
+      { header: "Ação", width: 20 },
+      { header: "Alvo", width: 14 },
+      { header: "Detalhes", width: 39 },
+    ],
+    maxCellLines: 4,
+    rows: rows.map((r) => [
+      fmt(r.createdAt),
+      `${who(r)}${r.confirmedBy ? ` (confirmado por ${r.confirmedBy.name})` : ""}`,
+      `${actionLabel(r.type)}\n${r.type}`,
+      `${TARGET_LABELS[r.targetType] ?? r.targetType} ${r.targetId.slice(-10)}`,
+      [r.payload != null ? JSON.stringify(r.payload) : "", r.result != null ? `-> ${JSON.stringify(r.result)}` : ""].filter(Boolean).join("\n"),
+    ]),
+  });
 }

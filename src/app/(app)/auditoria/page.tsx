@@ -1,10 +1,11 @@
 import { Fragment } from "react";
 import Link from "next/link";
 import { requireUser } from "@/lib/session";
-import { auditFiltersSchema, queryAudit } from "@/lib/audit-log";
+import { auditFiltersSchema, auditPeople, queryAudit } from "@/lib/audit-log";
+import { actionLabel, TARGET_LABELS } from "@/lib/audit-labels";
 import { AGENT_LABELS } from "@/lib/admin";
 import { formatDateTime } from "@/components/tickets/badges";
-import { ChevronLeft, ChevronRight, Download, SlidersHorizontal } from "lucide-react";
+import { ChevronLeft, ChevronRight, FileDown, FileSpreadsheet, SlidersHorizontal } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 
 export const metadata = { title: "Auditoria" };
@@ -19,7 +20,7 @@ export default async function AuditPage({ searchParams }: PageProps<"/auditoria"
   const raw = Object.fromEntries(Object.entries(await searchParams).map(([k, v]) => [k, (Array.isArray(v) ? v[0] : v) || undefined]));
   const parsed = auditFiltersSchema.safeParse(raw);
   const filters = parsed.success ? parsed.data : { page: 1 };
-  const { rows, total, pages } = await queryAudit(user, filters);
+  const [{ rows, total, pages }, people] = await Promise.all([queryAudit(user, filters), auditPeople(user)]);
   const qs = (page: number) => new URLSearchParams({ ...Object.fromEntries(Object.entries(raw).filter(([, v]) => v) as [string, string][]), page: String(page) }).toString();
 
   return (
@@ -27,7 +28,12 @@ export default async function AuditPage({ searchParams }: PageProps<"/auditoria"
       <PageHeader
         title="Auditoria"
         description={`Registro imutável de todas as ações de pessoas e agentes (${total} registros).`}
-        actions={<a className="btn" href={`/api/auditoria/csv?${qs(1)}`}><Download className="size-4" aria-hidden /> Exportar CSV</a>}
+        actions={
+          <>
+            <a className="btn" href={`/api/auditoria/csv?${qs(1)}`}><FileSpreadsheet className="size-4" aria-hidden /> Exportar CSV</a>
+            <a className="btn" href={`/api/auditoria/pdf?${qs(1)}`}><FileDown className="size-4" aria-hidden /> Exportar PDF</a>
+          </>
+        }
       />
       <form className="panel flex flex-wrap items-end gap-3 p-3" role="search">
         <label className="space-y-1">
@@ -36,6 +42,20 @@ export default async function AuditPage({ searchParams }: PageProps<"/auditoria"
             <option value="">Todos</option>
             <option value="user">Pessoas</option>
             <option value="agent">Agentes</option>
+          </select>
+        </label>
+        <label className="space-y-1">
+          <span className="block text-xs font-medium text-slate-500 dark:text-slate-400">Pessoa</span>
+          <select name="user" defaultValue={raw.user ?? ""} className="input py-1.5">
+            <option value="">Qualquer pessoa</option>
+            {people.map((p) => <option key={p.id} value={p.id}>{p.name}{p.active ? "" : " (inativo)"}</option>)}
+          </select>
+        </label>
+        <label className="space-y-1">
+          <span className="block text-xs font-medium text-slate-500 dark:text-slate-400">Tipo de alvo</span>
+          <select name="targetType" defaultValue={raw.targetType ?? ""} className="input py-1.5">
+            <option value="">Todos</option>
+            {Object.entries(TARGET_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
         </label>
         <label className="space-y-1">
@@ -77,9 +97,12 @@ export default async function AuditPage({ searchParams }: PageProps<"/auditoria"
                     {r.user ? r.user.name : <span className="badge bg-violet-50 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300">Agente {AGENT_LABELS[r.agent!.type]}</span>}
                     {r.confirmedBy && <span className="block text-xs text-slate-500">confirmado por {r.confirmedBy.name}</span>}
                   </td>
-                  <td><code className="rounded-md bg-slate-100 px-1.5 py-0.5 text-xs text-slate-700 dark:bg-slate-800 dark:text-slate-300">{r.type}</code></td>
+                  <td>
+                    <span className="block text-sm">{actionLabel(r.type)}</span>
+                    <code className="rounded-md bg-slate-100 px-1.5 py-0.5 text-xs text-slate-700 dark:bg-slate-800 dark:text-slate-300">{r.type}</code>
+                  </td>
                   <td className="text-xs">
-                    {TARGET_LINKS[r.targetType] ? <Link className="link" href={TARGET_LINKS[r.targetType](r.targetId)}>{r.targetType}</Link> : r.targetType}
+                    {TARGET_LINKS[r.targetType] ? <Link className="link" href={TARGET_LINKS[r.targetType](r.targetId)}>{TARGET_LABELS[r.targetType] ?? r.targetType}</Link> : (TARGET_LABELS[r.targetType] ?? r.targetType)}
                     <span className="block font-mono text-slate-500">{r.targetId.slice(-10)}</span>
                   </td>
                   <td className="max-w-md break-all font-mono text-xs text-slate-700 dark:text-slate-300">

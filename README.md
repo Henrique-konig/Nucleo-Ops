@@ -57,6 +57,18 @@ As seis fases do cronograma estão implementadas:
 | Auditor | Ler quadro, chamados, indicadores e log, sem alterar nada |
 
 As permissões ficam em `src/lib/permissions.ts` e são verificadas no servidor em toda operação.
+A matriz completa (papel × permissão) aparece em **Administração > Perfis de acesso** (`/admin/perfis`).
+Exportar a lista de chamados é restrito a coordenador e administrador.
+
+### Auditoria e exportação
+
+- Toda mudança grava uma linha no log append-only (`Action`) na mesma transação. Logins e tentativas
+  com senha errada (de contas existentes) também ficam registrados.
+- `/auditoria` filtra por pessoa, agente, ação, tipo de alvo e período, e exporta em **CSV** (até
+  50 mil linhas) ou **PDF** (até 5 mil).
+- `/chamados` exporta a lista filtrada em CSV ou PDF; `/relatorios` baixa cada relatório em PDF.
+- Toda exportação também fica no log (`audit.export`, `ticket.export`, `report.export`).
+- Os PDFs são gerados no servidor com `pdf-lib`, sem navegador headless.
 
 ## Agentes de IA
 
@@ -155,6 +167,7 @@ Postgres com Docker: `docker run -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=pl
 | `ANTHROPIC_API_KEY`, `AI_MODEL`, `AI_PROVIDER` | Provedor de IA (sem chave: provedor local) |
 | `VOYAGE_API_KEY` | Embeddings para busca semântica (sem chave: texto completo) |
 | `USD_BRL` | Cotação para mostrar custos em reais (padrão 5,40) |
+| `RESEND_API_KEY`, `EMAIL_FROM` | E-mail de saída sem cadastrar a integração (só `EMAIL_FROM`: registra no console) |
 
 ### Deploy na Vercel
 
@@ -200,6 +213,13 @@ gerados aparecem uma única vez, junto com a URL a configurar no serviço extern
 | GitLab | `/api/integrations/gitlab/:id` (Merge request events) | — |
 | Agenda de plantão | URL iCal secreta (Google Calendar ou Outlook) | — |
 | Executor de ações | — | POST assinado ao seu orquestrador (n8n, Rundeck, AWX…) |
+
+**Avisos por e-mail.** Com a integração de e-mail cadastrada, ou só com `RESEND_API_KEY` e
+`EMAIL_FROM` no ambiente, o Plantão envia e-mail:
+
+- ao solicitante, a cada resposta pública ou mudança de status, inclusive em chamados abertos pelo
+  portal ou passados do chat para a equipe (com o link de acompanhamento);
+- a quem for definido como responsável por um cartão (menos quando a pessoa atribui a si mesma).
 
 Para vincular um PR a um cartão, cite o código do cartão (`PLT-xxxxxxxx`, mostrado no cartão) no
 título, na descrição ou no branch do PR, ou cole o link no cartão.

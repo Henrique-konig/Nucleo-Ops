@@ -4,6 +4,7 @@ import { SubNav } from "@/components/shell/sub-nav";
 
 const SECTIONS: { href: string; label: string; permission: Permission }[] = [
   { href: "/admin/usuarios", label: "Usuários", permission: "user:manage" },
+  { href: "/admin/perfis", label: "Perfis de acesso", permission: "user:manage" },
   { href: "/admin/agentes", label: "Agentes", permission: "agent:manage" },
   { href: "/admin/integracoes", label: "Integrações", permission: "integration:manage" },
   { href: "/admin/automacoes", label: "Automações", permission: "automation:configure" },
