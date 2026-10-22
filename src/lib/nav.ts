@@ -6,6 +6,7 @@ const NAV: { href: string; label: string; permission: Permission; exclude?: Perm
   { href: "/solicitante", label: "Meus chamados", permission: "ticket:create", exclude: "board:view" },
   { href: "/boards", label: "Quadro", permission: "board:view" },
   { href: "/chamados", label: "Chamados", permission: "board:view" },
+  { href: "/base", label: "Base de conhecimento", permission: "board:view" },
 ];
 
 export function navFor(role: Role) {

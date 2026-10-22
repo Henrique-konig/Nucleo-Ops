@@ -9,6 +9,8 @@ export const PERMISSIONS = {
   "card:move": ["TECHNICIAN", "COORDINATOR", "ADMIN"],
   "card:assign": ["COORDINATOR", "ADMIN"],
   "card:prioritize": ["COORDINATOR", "ADMIN"],
+  "kb:edit": ["TECHNICIAN", "COORDINATOR", "ADMIN"],
+  "ai:use": ["TECHNICIAN", "COORDINATOR", "ADMIN"],
   "column:manage": ["COORDINATOR", "ADMIN"],
   "automation:configure": ["COORDINATOR", "ADMIN"],
   "user:manage": ["ADMIN"],

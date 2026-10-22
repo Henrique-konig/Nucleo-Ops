@@ -30,7 +30,32 @@ const labels = [
   { name: "Rede", color: "violet" },
   { name: "Urgente", color: "red" },
 ];
-const agents: AgentType[] = ["TRIAGE", "RESEARCH", "EXECUTION", "SUMMARY"];
+// Triagem, pesquisa e resumo começam ativos (sem chave de API usam o provedor local,
+// sem custo). Execução começa desligada e em simulação.
+const agents: { type: AgentType; active: boolean; dryRun: boolean }[] = [
+  { type: "TRIAGE", active: true, dryRun: false },
+  { type: "RESEARCH", active: true, dryRun: false },
+  { type: "EXECUTION", active: false, dryRun: true },
+  { type: "SUMMARY", active: true, dryRun: false },
+];
+
+const documents = [
+  {
+    title: "Como redefinir a senha de rede",
+    content:
+      "1. Acesse https://senha.exemplo.com pelo navegador.\n2. Informe seu e-mail corporativo e clique em Redefinir senha.\n3. Confirme o código enviado por SMS.\n4. Crie uma senha com pelo menos 12 caracteres.\nA nova senha vale para e-mail, VPN e Wi-Fi em até 15 minutos. Se a conta estiver bloqueada, abra um chamado.",
+  },
+  {
+    title: "VPN não conecta",
+    content:
+      "Verifique se a senha de rede não expirou. No cliente da VPN, remova o perfil e importe de novo pelo portal. Se aparecer o erro 809, a rede local bloqueia a VPN: teste pelo roteador do celular. Persistindo, abra um chamado informando o código do erro.",
+  },
+  {
+    title: "Impressora com fila travada",
+    content:
+      "No Windows, abra Configurações > Impressoras, selecione a impressora e clique em Abrir fila. Cancele todos os documentos e desligue a impressora por 30 segundos. Se continuar, reinicie o serviço Spooler de impressão ou abra um chamado.",
+  },
+];
 
 async function main() {
   const team =
@@ -50,12 +75,16 @@ async function main() {
     await db.label.upsert({ where: { teamId_name: { teamId: team.id, name: l.name } }, update: {}, create: { ...l, teamId: team.id } });
   }
 
-  for (const type of agents) {
+  for (const agent of agents) {
     await db.agent.upsert({
-      where: { teamId_type: { teamId: team.id, type } },
+      where: { teamId_type: { teamId: team.id, type: agent.type } },
       update: {},
-      create: { teamId: team.id, type, active: false, dryRun: true, permissions: { allowedActions: [], perMinute: 10, perDay: 500 } },
+      create: { teamId: team.id, ...agent, permissions: { allowedActions: [], perMinute: 30, perDay: 2000 } },
     });
+  }
+
+  if ((await db.document.count({ where: { teamId: team.id } })) === 0) {
+    await db.document.createMany({ data: documents.map((d) => ({ ...d, teamId: team.id })) });
   }
 
   if (!(await db.board.findFirst({ where: { teamId: team.id } }))) {
