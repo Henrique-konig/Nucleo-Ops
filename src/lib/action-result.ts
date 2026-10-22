@@ -1,22 +1,12 @@
 import "server-only";
 import { revalidatePath } from "next/cache";
-import { ZodError } from "zod";
 import { currentUser, type CurrentUser } from "@/lib/session";
-import { ForbiddenError } from "@/lib/permissions";
-import { BusinessError, NotFoundError } from "@/lib/errors";
-import { Prisma } from "@/generated/prisma/client";
+import { errorMessage } from "@/lib/error-message";
 import { kickJobs } from "@/lib/jobs/run";
 
-export type ActionResult<T = void> = { ok: true; data: T } | { ok: false; error: string };
+export { errorMessage };
 
-export function errorMessage(err: unknown): string {
-  if (err instanceof ZodError) return err.issues[0]?.message ?? "Dados inválidos";
-  if (err instanceof ForbiddenError) return "Você não tem permissão para esta ação";
-  if (err instanceof NotFoundError || err instanceof BusinessError) return err.message;
-  if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") return "Já existe um item com esses dados";
-  console.error(err);
-  return "Não foi possível concluir a ação";
-}
+export type ActionResult<T = void> = { ok: true; data: T } | { ok: false; error: string };
 
 /**
  * Executa uma server action com o usuário da sessão, converte erros em mensagens

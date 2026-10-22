@@ -219,7 +219,13 @@ export async function listTickets(actor: Actor, filters: z.infer<typeof ticketFi
 }
 
 export async function listRequesterTickets(userId: string) {
-  return db.ticket.findMany({ where: { requesterId: userId }, select: ticketListSelect, orderBy: { createdAt: "desc" }, take: 100 });
+  return db.ticket.findMany({
+    // Conversa em andamento com o assistente aparece no chat, não na lista.
+    where: { requesterId: userId, OR: [{ channel: { not: "CHAT" } }, { handoffAt: { not: null } }, { status: { in: ["RESOLVED", "CLOSED"] } }] },
+    select: ticketListSelect,
+    orderBy: { createdAt: "desc" },
+    take: 100,
+  });
 }
 
 const ticketDetailInclude = {

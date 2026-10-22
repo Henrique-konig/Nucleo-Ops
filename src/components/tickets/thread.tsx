@@ -1,7 +1,7 @@
 import type { TicketMessage } from "@/lib/tickets";
 import { formatDateTime } from "./badges";
 
-const AGENT_NAMES = { TRIAGE: "Agente de triagem", RESEARCH: "Agente de pesquisa", EXECUTION: "Agente de execução", SUMMARY: "Agente de resumo" } as const;
+const AGENT_NAMES = { TRIAGE: "Agente de triagem", RESEARCH: "Agente de pesquisa", EXECUTION: "Agente de execução", SUMMARY: "Agente de resumo", CHATBOT: "Assistente" } as const;
 
 function authorOf(m: TicketMessage, requesterId: string | null) {
   if (m.agent) return { name: AGENT_NAMES[m.agent.type] ?? "Assistente", kind: "agent" as const };

@@ -52,6 +52,7 @@ enum AgentType {
   RESEARCH
   EXECUTION
   SUMMARY
+  CHATBOT
 }
 
 enum DraftStatus {

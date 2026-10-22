@@ -4,19 +4,30 @@ import { listRequesterTickets } from "@/lib/tickets";
 import { db } from "@/lib/db";
 import { StatusBadge, formatDateTime } from "@/components/tickets/badges";
 import { ActionForm } from "@/components/tickets/action-form";
-import { openTicket } from "./actions";
+import { chatHuman, chatResolve, chatSend, openTicket } from "./actions";
+import { getActiveConversation } from "@/lib/chatbot";
+import { ChatWidget } from "@/components/chat/chat-widget";
 
 export const metadata = { title: "Meus chamados" };
 
 export default async function RequesterPage() {
   const user = await requireUser("ticket:create");
-  const [tickets, team] = await Promise.all([
+  const [tickets, team, conversation] = await Promise.all([
     listRequesterTickets(user.id),
     db.team.findUniqueOrThrow({ where: { id: user.teamId }, select: { categories: true } }),
+    getActiveConversation(user),
   ]);
 
   return (
     <main className="mx-auto grid max-w-5xl gap-8 p-6 lg:grid-cols-[1fr_22rem]">
+      <div className="space-y-8">
+      <ChatWidget
+        conversationId={conversation?.id ?? null}
+        messages={(conversation?.messages ?? []).map((m) => ({ id: m.id, content: m.content, fromAssistant: Boolean(m.agentId), system: !m.agentId && !m.authorId }))}
+        send={chatSend}
+        resolve={conversation ? chatResolve.bind(null, conversation.id) : undefined}
+        human={conversation ? chatHuman.bind(null, conversation.id) : undefined}
+      />
       <section aria-labelledby="my-tickets">
         <h1 id="my-tickets" className="mb-4 text-xl font-semibold">Meus chamados</h1>
         {tickets.length === 0 ? (
@@ -37,6 +48,7 @@ export default async function RequesterPage() {
           </ul>
         )}
       </section>
+      </div>
 
       <section aria-labelledby="new-ticket" className="h-fit rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
         <h2 id="new-ticket" className="mb-3 font-semibold">Abrir chamado</h2>

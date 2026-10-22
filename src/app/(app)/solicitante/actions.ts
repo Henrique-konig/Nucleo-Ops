@@ -6,6 +6,7 @@ import { addRequesterMessage, createTicket, rateTicket } from "@/lib/tickets";
 import { assertCan } from "@/lib/permissions";
 import { db } from "@/lib/db";
 import { NotFoundError } from "@/lib/errors";
+import { requestHuman, resolveConversation, sendChatMessage } from "@/lib/chatbot";
 
 export async function openTicket(fd: FormData) {
   const result = await runAction(async (user) => {
@@ -39,4 +40,19 @@ export async function sendRequesterMessage(ticketId: string, fd: FormData) {
 
 export async function rateOwnTicket(ticketId: string, fd: FormData) {
   return runAction((user) => rateTicket({ id: ticketId, requesterId: user.id }, Number(fd.get("score"))), ["/solicitante/chamados/[ticketId]"]);
+}
+
+export async function chatSend(fd: FormData) {
+  return runAction(async (user) => {
+    assertCan(user.role, "ticket:create");
+    return sendChatMessage(user, String(fd.get("content") ?? ""));
+  }, ["/solicitante"]);
+}
+
+export async function chatResolve(ticketId: string) {
+  return runAction((user) => resolveConversation(user, ticketId), ["/solicitante"]);
+}
+
+export async function chatHuman(ticketId: string) {
+  return runAction((user) => requestHuman(user, ticketId), ["/solicitante"]);
 }
