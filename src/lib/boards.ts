@@ -5,18 +5,14 @@ import { recordAction } from "@/lib/audit";
 import { assertCan } from "@/lib/permissions";
 import { needsRebalance, positionAt, rebalanced } from "@/lib/ordering";
 import type { Prisma } from "@/generated/prisma/client";
+import { BusinessError, NotFoundError, type Actor } from "@/lib/errors";
+import { applyStatus } from "@/lib/tickets";
+import { runColumnAutomations } from "@/lib/automations";
 
 // Regras do quadro de tarefas. Cada operação valida permissão e equipe, e grava
 // a mudança e o registro de auditoria na mesma transação.
 
-export type Actor = { id: string; role: Parameters<typeof assertCan>[0]; teamId: string };
-
-export class NotFoundError extends Error {
-  constructor(what: string) {
-    super(`${what} não encontrado`);
-    this.name = "NotFoundError";
-  }
-}
+export { NotFoundError, type Actor } from "@/lib/errors";
 
 const cardInclude = {
   assignee: { select: { id: true, name: true } },
@@ -88,6 +84,10 @@ export const schemas = {
   renameColumn: z.object({ columnId: id, name }),
   moveColumn: z.object({ columnId: id, toIndex: z.number().int().min(0) }),
   deleteColumn: z.object({ columnId: id }),
+  setColumnTicketStatus: z.object({
+    columnId: id,
+    ticketStatus: z.enum(["OPEN", "IN_PROGRESS", "WAITING", "RESOLVED", "CLOSED"]).nullable(),
+  }),
   createLabel: z.object({ name: z.string().trim().min(1).max(40), color: z.enum(["slate", "red", "amber", "green", "sky", "violet", "pink"]) }),
 };
 
@@ -161,6 +161,15 @@ export async function moveCard(actor: Actor, input: Input<"moveCard">) {
       teamId: actor.teamId, userId: actor.id, type: "card.move", targetType: "card", targetId: card.id,
       payload: { fromColumnId: card.columnId, toColumnId: toColumn.id, toIndex: data.toIndex },
     });
+
+    if (card.columnId !== toColumn.id) {
+      // A coluna pode definir o status do chamado (ex.: "Concluído" → resolvido).
+      if (card.ticketId && toColumn.ticketStatus) {
+        const ticket = await tx.ticket.findUniqueOrThrow({ where: { id: card.ticketId } });
+        await applyStatus(tx, ticket, toColumn.ticketStatus, actor.id, { moveCard: false, byAgent: false });
+      }
+      await runColumnAutomations(tx, { cardId: card.id, columnId: toColumn.id, teamId: actor.teamId });
+    }
     return moved;
   });
 }
@@ -339,12 +348,26 @@ export async function deleteColumn(actor: Actor, input: Input<"deleteColumn">) {
     const column = await findColumn(tx, actor, data.columnId);
     // Cartões arquivados também contam: a coluna guarda o histórico deles.
     if ((await tx.card.count({ where: { columnId: column.id } })) > 0) {
-      throw new Error("Só é possível excluir colunas sem cartões");
+      throw new BusinessError("Só é possível excluir colunas sem cartões");
     }
     await tx.column.delete({ where: { id: column.id } });
     await recordAction(tx, {
       teamId: actor.teamId, userId: actor.id, type: "column.delete", targetType: "column", targetId: column.id,
       payload: { name: column.name },
+    });
+  });
+}
+
+export async function setColumnTicketStatus(actor: Actor, input: Input<"setColumnTicketStatus">) {
+  assertCan(actor.role, "column:manage");
+  const data = schemas.setColumnTicketStatus.parse(input);
+  return db.$transaction(async (tx) => {
+    const column = await findColumn(tx, actor, data.columnId);
+    if (column.ticketStatus === data.ticketStatus) return;
+    await tx.column.update({ where: { id: column.id }, data: { ticketStatus: data.ticketStatus } });
+    await recordAction(tx, {
+      teamId: actor.teamId, userId: actor.id, type: "column.ticket_status", targetType: "column", targetId: column.id,
+      payload: { from: column.ticketStatus, to: data.ticketStatus },
     });
   });
 }

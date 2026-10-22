@@ -232,6 +232,14 @@ export function BoardView({ board, members, labels, permissions }: Props) {
   );
 }
 
+const PRIORITY_NAMES = { LOW: "baixa", MEDIUM: "média", HIGH: "alta", URGENT: "urgente" } as const;
+const PRIORITY_STYLE = {
+  LOW: "bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200",
+  MEDIUM: "bg-sky-100 text-sky-900 dark:bg-sky-900 dark:text-sky-100",
+  HIGH: "bg-orange-100 text-orange-900 dark:bg-orange-900 dark:text-orange-100",
+  URGENT: "bg-red-100 text-red-900 dark:bg-red-900 dark:text-red-100",
+} as const;
+
 function DropIndicator() {
   return <div aria-hidden className="my-1 h-1 rounded bg-sky-500" />;
 }
@@ -249,6 +257,11 @@ function CardSummary({ card }: { card: BoardCard }) {
         </div>
       )}
       <p className="font-medium">{card.title}</p>
+      {card.ticket && (
+        <p className="mt-1 flex flex-wrap gap-1 text-xs">
+          <span className={`rounded px-1.5 ${PRIORITY_STYLE[card.ticket.priority]}`}>Chamado · {PRIORITY_NAMES[card.ticket.priority]}</span>
+        </p>
+      )}
       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600 dark:text-slate-400">
         {card.dueDate && (
           <span className={overdue ? "font-medium text-red-700 dark:text-red-400" : ""}>
@@ -303,7 +316,7 @@ function ColumnHeader({
           <summary className="cursor-pointer list-none rounded px-1 text-slate-600 hover:bg-slate-300 dark:text-slate-400 dark:hover:bg-slate-800" aria-label={`Opções da coluna ${column.name}`}>
             ⋯
           </summary>
-          <div className="absolute right-0 z-10 mt-1 flex w-44 flex-col rounded-md border border-slate-200 bg-white p-1 text-sm shadow-lg dark:border-slate-700 dark:bg-slate-900">
+          <div className="absolute right-0 z-10 mt-1 flex w-56 flex-col rounded-md border border-slate-200 bg-white p-1 text-sm shadow-lg dark:border-slate-700 dark:bg-slate-900">
             <button className="rounded px-2 py-1 text-left hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => setEditing(true)}>Renomear</button>
             <button
               className="rounded px-2 py-1 text-left hover:bg-slate-100 disabled:opacity-40 dark:hover:bg-slate-800"
@@ -319,6 +332,26 @@ function ColumnHeader({
             >
               Mover para a direita
             </button>
+            <label className="px-2 py-1 text-xs text-slate-600 dark:text-slate-400">
+              Status do chamado ao entrar
+              <select
+                className="input mt-1 py-1 text-sm"
+                value={column.ticketStatus ?? ""}
+                disabled={pending}
+                onChange={(e) =>
+                  startTransition(async () => {
+                    onResult(await actions.setColumnTicketStatus({ columnId: column.id, ticketStatus: e.target.value || null }));
+                  })
+                }
+              >
+                <option value="">Não altera</option>
+                <option value="OPEN">Aberto</option>
+                <option value="IN_PROGRESS">Em andamento</option>
+                <option value="WAITING">Aguardando solicitante</option>
+                <option value="RESOLVED">Resolvido</option>
+                <option value="CLOSED">Encerrado</option>
+              </select>
+            </label>
             <button
               className="rounded px-2 py-1 text-left text-red-700 hover:bg-red-50 disabled:opacity-40 dark:text-red-300 dark:hover:bg-red-950"
               disabled={pending}

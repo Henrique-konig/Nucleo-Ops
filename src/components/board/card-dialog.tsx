@@ -61,7 +61,12 @@ export function CardDialog({ card, columns, members, labels, permissions, onClos
     >
       <div className="max-h-[85vh] space-y-5 overflow-y-auto p-5">
         <div className="flex items-start justify-between gap-2">
-          <h2 id="card-dialog-title" className="text-lg font-semibold">Cartão</h2>
+          <div>
+            <h2 id="card-dialog-title" className="text-lg font-semibold">Cartão</h2>
+            {card.ticket && (
+              <a href={`/chamados/${card.ticket.id}`} className="text-sm text-sky-800 underline dark:text-sky-300">Abrir chamado e conversa</a>
+            )}
+          </div>
           <button className="btn" onClick={onClose}>Fechar</button>
         </div>
 

@@ -2,8 +2,10 @@
 // agentes (desativados e em modo de simulação). Pode rodar mais de uma vez.
 import "dotenv/config";
 import bcrypt from "bcryptjs";
+import { randomBytes } from "node:crypto";
 import { createPrismaClient } from "../src/lib/prisma-client";
-import type { AgentType, Role } from "../src/generated/prisma/enums";
+import type { AgentType, Role, TicketStatus } from "../src/generated/prisma/enums";
+import { sealIntegrationConfig } from "../src/lib/integrations";
 
 const db = createPrismaClient();
 
@@ -17,7 +19,12 @@ const users: { name: string; email: string; role: Role }[] = [
   { name: "Aurora Auditora", email: "auditor@plantao.local", role: "AUDITOR" },
 ];
 
-const columns = ["Entrada", "Em andamento", "Em revisão", "Concluído"];
+const columns: { name: string; ticketStatus: TicketStatus | null }[] = [
+  { name: "Entrada", ticketStatus: "OPEN" },
+  { name: "Em andamento", ticketStatus: "IN_PROGRESS" },
+  { name: "Em revisão", ticketStatus: null },
+  { name: "Concluído", ticketStatus: "RESOLVED" },
+];
 const labels = [
   { name: "Acesso", color: "sky" },
   { name: "Rede", color: "violet" },
@@ -56,7 +63,23 @@ async function main() {
       data: {
         name: "Atendimento",
         teamId: team.id,
-        columns: { create: columns.map((name, i) => ({ name, position: (i + 1) * 1024 })) },
+        columns: { create: columns.map((c, i) => ({ ...c, position: (i + 1) * 1024 })) },
+      },
+    });
+  }
+
+  // E-mail em modo "log": as mensagens aparecem no console até configurar um provedor.
+  if (!(await db.integration.findFirst({ where: { teamId: team.id, type: "EMAIL" } }))) {
+    await db.integration.create({
+      data: {
+        teamId: team.id,
+        type: "EMAIL",
+        name: "E-mail (desenvolvimento)",
+        configEncrypted: sealIntegrationConfig("EMAIL", {
+          provider: "log",
+          from: "Plantão <plantao@exemplo.com>",
+          inboundToken: randomBytes(24).toString("hex"),
+        }),
       },
     });
   }
