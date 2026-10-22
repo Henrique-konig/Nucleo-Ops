@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bot, CalendarClock, Check, CheckSquare, ChevronDown, GripVertical, LayoutGrid, MoreHorizontal, Plus, Radio, Ticket, X } from "lucide-react";
+import { Bot, CalendarClock, Check, CheckSquare, ChevronDown, GripVertical, LayoutGrid, MessageSquare, MoreHorizontal, Paperclip, Plus, Radio, Ticket, X } from "lucide-react";
 import type { BoardCard, BoardData, SavedFilterItem } from "@/lib/boards";
 import * as actions from "@/app/(app)/boards/[boardId]/actions";
 import { CardDialog } from "./card-dialog";
@@ -20,6 +20,7 @@ export type BoardPermissions = {
   assign: boolean;
   manageColumns: boolean;
   runAgents: boolean;
+  comment: boolean;
 };
 
 type Column = BoardData["columns"][number];
@@ -62,10 +63,16 @@ export function BoardView({ board, boards, members, labels, agents, savedFilters
   const [openCardId, setOpenCardId] = useState<string | null>(initialCardId);
   const [filter, setFilter] = useState<BoardFilter>({});
   const [saved, setSaved] = useState(savedFilters);
+  const [version, setVersion] = useState(0);
   const [dragging, setDragging] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{ columnId: string; index: number } | null>(null);
   const [live, setLive] = useState<"connecting" | "online" | "offline">("connecting");
   const [, startTransition] = useTransition();
+
+  // Link de notificação para outro cartão do mesmo quadro: a página não remonta.
+  useEffect(() => {
+    if (initialCardId) setOpenCardId(initialCardId);
+  }, [initialCardId]);
 
   // Dados novos do servidor substituem o estado otimista.
   useEffect(() => setColumns(board.columns), [board.columns]);
@@ -91,7 +98,10 @@ export function BoardView({ board, boards, members, labels, agents, savedFilters
   useEffect(() => {
     const source = new EventSource(`/api/boards/${board.id}/events`);
     source.addEventListener("ready", () => setLive("online"));
-    source.addEventListener("change", () => startTransition(() => router.refresh()));
+    source.addEventListener("change", () => {
+      setVersion((v) => v + 1);
+      startTransition(() => router.refresh());
+    });
     source.onerror = () => setLive("offline");
     source.onopen = () => setLive("online");
     return () => source.close();
@@ -142,6 +152,92 @@ export function BoardView({ board, boards, members, labels, agents, savedFilters
     move(card.id, target.columnId, realIndex(target.columnId, target.index));
     requestAnimationFrame(() => document.getElementById(`card-${card.id}`)?.focus());
   }
+
+  // Toque (celular): segurar o cartão por um instante inicia o arraste; mover o
+  // dedo antes disso rola o quadro normalmente.
+  const touch = useRef<{ cardId: string; x: number; y: number; timer: ReturnType<typeof setTimeout> | null; active: boolean } | null>(null);
+  const dropRef = useRef(dropTarget);
+  dropRef.current = dropTarget;
+  const boardRef = useRef<HTMLDivElement>(null);
+  const suppressClick = useRef(false);
+  const [touchDragging, setTouchDragging] = useState(false);
+  const moveRef = useRef(move);
+  moveRef.current = (cardId: string, columnId: string, index: number) => move(cardId, columnId, realIndex(columnId, index));
+
+  function onCardTouchStart(e: React.TouchEvent, cardId: string) {
+    if (!permissions.moveCard || e.touches.length !== 1) return;
+    const t = e.touches[0];
+    const state = { cardId, x: t.clientX, y: t.clientY, timer: null as ReturnType<typeof setTimeout> | null, active: false };
+    state.timer = setTimeout(() => {
+      state.active = true;
+      setDragging(cardId);
+      setTouchDragging(true);
+      navigator.vibrate?.(15);
+    }, 350);
+    touch.current = state;
+  }
+
+  function onCardTouchMove(e: React.TouchEvent) {
+    const state = touch.current;
+    if (!state || state.active) return;
+    const t = e.touches[0];
+    if (Math.hypot(t.clientX - state.x, t.clientY - state.y) > 10) {
+      if (state.timer) clearTimeout(state.timer);
+      touch.current = null;
+    }
+  }
+
+  function onCardTouchEnd() {
+    const state = touch.current;
+    if (state && !state.active) {
+      if (state.timer) clearTimeout(state.timer);
+      touch.current = null;
+    }
+  }
+
+  useEffect(() => {
+    if (!touchDragging) return;
+    function target(x: number, y: number) {
+      const el = document.elementFromPoint(x, y);
+      const section = el?.closest<HTMLElement>("[data-drop-column]");
+      if (!section) return null;
+      const columnId = section.dataset.dropColumn!;
+      const item = el?.closest<HTMLElement>("[data-drop-index]");
+      if (!item) return { columnId, index: Number(section.dataset.dropCount ?? 0) };
+      const rect = item.getBoundingClientRect();
+      return { columnId, index: Number(item.dataset.dropIndex) + (y > rect.top + rect.height / 2 ? 1 : 0) };
+    }
+    function onMove(e: TouchEvent) {
+      e.preventDefault();
+      const t = e.touches[0];
+      setDropTarget(target(t.clientX, t.clientY));
+      // Perto da borda, o quadro rola sozinho para alcançar outras colunas.
+      const board = boardRef.current;
+      if (board) {
+        if (t.clientX < 48) board.scrollBy({ left: -16 });
+        else if (t.clientX > window.innerWidth - 48) board.scrollBy({ left: 16 });
+      }
+    }
+    function onEnd() {
+      const state = touch.current;
+      const drop = dropRef.current;
+      touch.current = null;
+      setTouchDragging(false);
+      setDragging(null);
+      setDropTarget(null);
+      suppressClick.current = true;
+      setTimeout(() => (suppressClick.current = false), 50);
+      if (state && drop) moveRef.current(state.cardId, drop.columnId, drop.index);
+    }
+    document.addEventListener("touchmove", onMove, { passive: false });
+    document.addEventListener("touchend", onEnd);
+    document.addEventListener("touchcancel", onEnd);
+    return () => {
+      document.removeEventListener("touchmove", onMove);
+      document.removeEventListener("touchend", onEnd);
+      document.removeEventListener("touchcancel", onEnd);
+    };
+  }, [touchDragging]);
 
   function onDrop(e: React.DragEvent, columnId: string, index: number) {
     e.preventDefault();
@@ -208,15 +304,17 @@ export function BoardView({ board, boards, members, labels, agents, savedFilters
       <p aria-live="polite" className="sr-only">{announcement}</p>
       {permissions.moveCard && (
         <p className="sr-only" id="board-help">
-          Use Alt e as setas para mover o cartão focado entre colunas e posições. Enter abre o cartão.
+          Use Alt e as setas para mover o cartão focado entre colunas e posições. Enter abre o cartão. No celular, segure o cartão para arrastar.
         </p>
       )}
 
-      <div className="flex flex-1 snap-x gap-4 overflow-x-auto px-4 pb-6 sm:px-6 lg:px-8">
+      <div ref={boardRef} className={`flex flex-1 gap-4 overflow-x-auto px-4 pb-6 sm:px-6 lg:px-8 ${touchDragging ? "" : "snap-x"}`}>
         {visibleColumns.map((column, columnIndex) => (
           <section
             key={column.id}
             aria-labelledby={`column-${column.id}`}
+            data-drop-column={column.id}
+            data-drop-count={column.cards.length}
             style={{ animationDelay: `${columnIndex * 50}ms` }}
             className={`flex w-[19rem] shrink-0 animate-rise snap-start flex-col rounded-2xl border transition-colors duration-200 ${
               dragging && dropTarget?.columnId === column.id
@@ -244,6 +342,7 @@ export function BoardView({ board, boards, members, labels, agents, savedFilters
               {column.cards.map((card, cardIndex) => (
                 <li
                   key={card.id}
+                  data-drop-index={cardIndex}
                   onDragOver={(e) => {
                     if (!dragging) return;
                     e.preventDefault();
@@ -273,10 +372,14 @@ export function BoardView({ board, boards, members, labels, agents, savedFilters
                       setDragging(null);
                       setDropTarget(null);
                     }}
-                    onClick={() => setOpenCardId(card.id)}
+                    onClick={() => !suppressClick.current && setOpenCardId(card.id)}
+                    onTouchStart={(e) => onCardTouchStart(e, card.id)}
+                    onTouchMove={onCardTouchMove}
+                    onTouchEnd={onCardTouchEnd}
+                    onContextMenu={(e) => dragging === card.id && e.preventDefault()}
                     onKeyDown={(e) => onCardKeyDown(e, card, columnIndex, cardIndex)}
-                    className={`group relative cursor-pointer overflow-hidden rounded-xl border border-slate-200/80 bg-white p-3 text-sm shadow-card transition duration-200 hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-lift active:cursor-grabbing dark:border-slate-700/60 dark:bg-slate-800/70 dark:hover:border-brand-700 ${
-                      dragging === card.id ? "scale-[0.97] rotate-1 opacity-40" : ""
+                    className={`group relative cursor-pointer overflow-hidden rounded-xl [-webkit-touch-callout:none] select-none border border-slate-200/80 bg-white p-3 text-sm shadow-card transition duration-200 hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-lift active:cursor-grabbing dark:border-slate-700/60 dark:bg-slate-800/70 dark:hover:border-brand-700 ${
+                      dragging === card.id ? (touchDragging ? "scale-[1.03] rotate-1 shadow-lift ring-2 ring-brand-400" : "scale-[0.97] rotate-1 opacity-40") : ""
                     }`}
                   >
                     <CardSummary card={card} draggable={permissions.moveCard} />
@@ -309,6 +412,8 @@ export function BoardView({ board, boards, members, labels, agents, savedFilters
           agents={agents}
           boards={boards.filter((b) => b.id !== board.id)}
           permissions={permissions}
+          currentUserId={userId}
+          version={version}
           onClose={() => {
             setOpenCardId(null);
             // Tira o ?cartao= da URL, para recarregar a página sem reabrir o cartão.
@@ -338,7 +443,7 @@ function DropIndicator() {
 function CardSummary({ card, draggable }: { card: BoardCard; draggable: boolean }) {
   const done = card.checklist.filter((i) => i.done).length;
   const overdue = card.dueDate && new Date(card.dueDate) < new Date();
-  const hasMeta = card.dueDate || card.checklist.length > 0 || card.assignee || card.agent;
+  const hasMeta = card.dueDate || card.checklist.length > 0 || card.assignee || card.agent || card._count.comments > 0 || card._count.attachments > 0;
   return (
     <>
       {card.ticket && <span aria-hidden className={`absolute inset-y-0 left-0 w-1 ${PRIORITY_BAR[card.ticket.priority]}`} />}
@@ -375,6 +480,20 @@ function CardSummary({ card, draggable }: { card: BoardCard; draggable: boolean 
                 <CheckSquare className="size-3.5" aria-hidden />
                 <span className="sr-only">Checklist </span>
                 {done}/{card.checklist.length}
+              </span>
+            )}
+            {card._count.comments > 0 && (
+              <span className="inline-flex items-center gap-1">
+                <MessageSquare className="size-3.5" aria-hidden />
+                {card._count.comments}
+                <span className="sr-only">{card._count.comments === 1 ? "comentário" : "comentários"}</span>
+              </span>
+            )}
+            {card._count.attachments > 0 && (
+              <span className="inline-flex items-center gap-1">
+                <Paperclip className="size-3.5" aria-hidden />
+                {card._count.attachments}
+                <span className="sr-only">{card._count.attachments === 1 ? "anexo" : "anexos"}</span>
               </span>
             )}
           </div>

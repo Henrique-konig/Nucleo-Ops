@@ -12,6 +12,7 @@ import { runColumnAutomations } from "@/lib/automations";
 import { customAgentOptions, queueAgentRun } from "@/lib/custom-agents";
 import { boardFilterSchema, cleanFilter } from "@/lib/board-filters";
 import { DEFAULT_COLUMNS } from "@/lib/team-defaults";
+import { notifyAssigned } from "@/lib/inbox";
 
 // Regras do quadro de tarefas. Cada operação valida permissão e equipe, e grava
 // a mudança e o registro de auditoria na mesma transação.
@@ -25,6 +26,7 @@ const cardInclude = {
   checklist: { select: { id: true, text: true, done: true, position: true }, orderBy: { position: "asc" } },
   ticket: { select: { id: true, priority: true, status: true, channel: true } },
   links: { select: { id: true, url: true, title: true, state: true, provider: true }, orderBy: { updatedAt: "desc" } },
+  _count: { select: { comments: { where: { deletedAt: null } }, attachments: true } },
 } satisfies Prisma.CardInclude;
 
 export async function getBoard(actor: Actor, boardId: string) {
@@ -282,6 +284,7 @@ export async function updateCard(actor: Actor, input: Input<"updateCard">) {
     if (changes.assigneeId && fields.assigneeId && fields.assigneeId !== actor.id) {
       await enqueue(tx, { teamId: actor.teamId, type: "notify.assignee", payload: { cardId: card.id, assigneeId: fields.assigneeId, byUserId: actor.id } });
     }
+    if (changes.assigneeId && updated.assigneeId) await notifyAssigned(tx, updated, updated.assigneeId, actor.teamId, actor.id);
     return updated;
   });
 }
