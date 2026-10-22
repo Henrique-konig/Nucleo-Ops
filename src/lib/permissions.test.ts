@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assertCan, can, ForbiddenError } from "./permissions";
+import { assertCan, can, describePermission, ForbiddenError, PERMISSIONS, type Permission } from "./permissions";
 
 describe("permissões por papel", () => {
   it("solicitante só abre chamados", () => {
@@ -31,5 +31,15 @@ describe("permissões por papel", () => {
   it("assertCan lança ForbiddenError", () => {
     expect(() => assertCan("AUDITOR", "card:move")).toThrow(ForbiddenError);
     expect(() => assertCan("ADMIN", "agent:manage")).not.toThrow();
+  });
+
+  it("só coordenador e administrador exportam chamados", () => {
+    expect(can("ADMIN", "ticket:export")).toBe(true);
+    expect(can("COORDINATOR", "ticket:export")).toBe(true);
+    for (const r of ["TECHNICIAN", "REQUESTER", "AUDITOR"] as const) expect(can(r, "ticket:export")).toBe(false);
+  });
+
+  it("toda permissão tem nome legível na matriz de perfis", () => {
+    for (const p of Object.keys(PERMISSIONS) as Permission[]) expect(describePermission(p).group).not.toBe("Outras");
   });
 });

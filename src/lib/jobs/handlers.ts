@@ -1,6 +1,6 @@
 import "server-only";
 import type { JobHandler } from "./queue";
-import { notifyRequesterJob, notifyTeamJob } from "@/lib/notifications";
+import { notifyAssigneeJob, notifyRequesterJob, notifyTeamJob } from "@/lib/notifications";
 import { runAutomationJob } from "@/lib/automations";
 import { ticketCreatedJob, ticketHandoffJob } from "@/lib/ticket-events";
 import { triageJob } from "@/lib/agents/triage";
@@ -16,6 +16,7 @@ export const jobHandlers: Record<string, JobHandler> = {
   "ticket.requester_message": async () => {},
   "notify.requester": notifyRequesterJob,
   "notify.team": notifyTeamJob,
+  "notify.assignee": notifyAssigneeJob,
   "automation.run": runAutomationJob,
   "agent.triage": triageJob,
   "agent.research": researchJob,

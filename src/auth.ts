@@ -3,6 +3,7 @@ import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { db } from "@/lib/db";
+import { recordAction } from "@/lib/audit";
 import type { Role } from "@/generated/prisma/enums";
 
 const credentialsSchema = z.object({
@@ -21,11 +22,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!parsed.success) throw new CredentialsSignin();
         const user = await db.user.findUnique({ where: { email: parsed.data.email } });
         if (!user?.active || !user.passwordHash) throw new CredentialsSignin();
-        if (!(await bcrypt.compare(parsed.data.password, user.passwordHash))) throw new CredentialsSignin();
+        if (!(await bcrypt.compare(parsed.data.password, user.passwordHash))) {
+          // Senha errada para uma conta existente fica na auditoria (e-mail inexistente não tem a quem atribuir).
+          await logAuth(user, "auth.login_failed");
+          throw new CredentialsSignin();
+        }
         return { id: user.id, name: user.name, email: user.email, role: user.role, teamId: user.teamId };
       },
     }),
   ],
+  events: {
+    async signIn({ user }) {
+      if (user.id && user.teamId) await logAuth({ id: user.id, teamId: user.teamId }, "auth.login");
+    },
+  },
   callbacks: {
     jwt({ token, user }) {
       if (user) {
@@ -43,3 +53,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
   },
 });
+
+/** Registro de login na auditoria; uma falha aqui não pode impedir a entrada. */
+async function logAuth(user: { id: string; teamId: string }, type: "auth.login" | "auth.login_failed") {
+  try {
+    await db.$transaction((tx) => recordAction(tx, { teamId: user.teamId, userId: user.id, type, targetType: "user", targetId: user.id }));
+  } catch (err) {
+    console.error("[auth] falha ao registrar na auditoria", err);
+  }
+}

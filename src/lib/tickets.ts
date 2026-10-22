@@ -200,8 +200,8 @@ export const ticketFiltersSchema = z.object({
   mine: z.literal("1").optional(),
 });
 
-export async function listTickets(actor: Actor, filters: z.infer<typeof ticketFiltersSchema>) {
-  assertCan(actor.role, "board:view");
+/** Filtro da fila de chamados, compartilhado pela lista e pela exportação. */
+export function ticketWhere(actor: Actor, filters: z.infer<typeof ticketFiltersSchema>): Prisma.TicketWhereInput {
   const where: Prisma.TicketWhereInput = {
     teamId: actor.teamId,
     // Conversas do chatbot que não passaram para um humano não entram na fila.
@@ -215,7 +215,12 @@ export async function listTickets(actor: Actor, filters: z.infer<typeof ticketFi
   if (filters.q) {
     where.AND = [{ OR: [{ title: { contains: filters.q, mode: "insensitive" } }, { description: { contains: filters.q, mode: "insensitive" } }, { requesterEmail: { contains: filters.q, mode: "insensitive" } }] }];
   }
-  return db.ticket.findMany({ where, select: ticketListSelect, orderBy: [{ createdAt: "desc" }], take: 200 });
+  return where;
+}
+
+export async function listTickets(actor: Actor, filters: z.infer<typeof ticketFiltersSchema>) {
+  assertCan(actor.role, "board:view");
+  return db.ticket.findMany({ where: ticketWhere(actor, filters), select: ticketListSelect, orderBy: [{ createdAt: "desc" }], take: 200 });
 }
 
 export async function listRequesterTickets(userId: string) {
