@@ -1,13 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CalendarClock, CheckSquare, GripVertical, MoreHorizontal, Plus, Radio, Ticket, X } from "lucide-react";
-import type { BoardCard, BoardData } from "@/lib/boards";
+import { Bot, CalendarClock, Check, CheckSquare, ChevronDown, GripVertical, LayoutGrid, MoreHorizontal, Plus, Radio, Ticket, X } from "lucide-react";
+import type { BoardCard, BoardData, SavedFilterItem } from "@/lib/boards";
 import * as actions from "@/app/(app)/boards/[boardId]/actions";
 import { CardDialog } from "./card-dialog";
+import { FilterBar } from "./filter-bar";
 import { initials } from "@/lib/initials";
-import { COLUMN_ACCENTS, LABEL_COLORS, type LabelOption, type MemberOption } from "./shared";
+import { isFilterActive, matchesFilter, type BoardFilter } from "@/lib/board-filters";
+import { accent } from "@/components/ui/accent";
+import { COLUMN_ACCENTS, LABEL_COLORS, type AgentOption, type BoardOption, type LabelOption, type MemberOption } from "./shared";
 
 export type BoardPermissions = {
   createCard: boolean;
@@ -15,14 +19,20 @@ export type BoardPermissions = {
   moveCard: boolean;
   assign: boolean;
   manageColumns: boolean;
+  runAgents: boolean;
 };
 
 type Column = BoardData["columns"][number];
 
 type Props = {
   board: BoardData;
+  boards: BoardOption[];
   members: MemberOption[];
   labels: LabelOption[];
+  agents: AgentOption[];
+  savedFilters: SavedFilterItem[];
+  userId: string;
+  initialCardId: string | null;
   permissions: BoardPermissions;
 };
 
@@ -44,12 +54,14 @@ function moveLocally(columns: Column[], cardId: string, toColumnId: string, toIn
   });
 }
 
-export function BoardView({ board, members, labels, permissions }: Props) {
+export function BoardView({ board, boards, members, labels, agents, savedFilters, userId, initialCardId, permissions }: Props) {
   const router = useRouter();
   const [columns, setColumns] = useState(board.columns);
   const [error, setError] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
-  const [openCardId, setOpenCardId] = useState<string | null>(null);
+  const [openCardId, setOpenCardId] = useState<string | null>(initialCardId);
+  const [filter, setFilter] = useState<BoardFilter>({});
+  const [saved, setSaved] = useState(savedFilters);
   const [dragging, setDragging] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{ columnId: string; index: number } | null>(null);
   const [live, setLive] = useState<"connecting" | "online" | "offline">("connecting");
@@ -57,6 +69,23 @@ export function BoardView({ board, members, labels, permissions }: Props) {
 
   // Dados novos do servidor substituem o estado otimista.
   useEffect(() => setColumns(board.columns), [board.columns]);
+  useEffect(() => setSaved(savedFilters), [savedFilters]);
+
+  // Com filtro, cada coluna mostra só os cartões que atendem; o arraste continua
+  // valendo e as posições são convertidas para a lista completa.
+  const filtering = isFilterActive(filter);
+  const visibleColumns = useMemo(
+    () => (filtering ? columns.map((col) => ({ ...col, cards: col.cards.filter((card) => matchesFilter(card, filter, { userId })) })) : columns),
+    [columns, filter, filtering, userId],
+  );
+
+  function realIndex(columnId: string, visibleIndex: number) {
+    const full = columns.find((c) => c.id === columnId);
+    const visible = visibleColumns.find((c) => c.id === columnId);
+    if (!full || !visible || !filtering) return visibleIndex;
+    const anchor = visible.cards[visibleIndex];
+    return anchor ? full.cards.findIndex((c) => c.id === anchor.id) : full.cards.length;
+  }
 
   // Tempo real: o servidor avisa por SSE e a página busca o quadro de novo.
   useEffect(() => {
@@ -101,15 +130,16 @@ export function BoardView({ board, members, labels, permissions }: Props) {
     }
     if (!permissions.moveCard || !e.altKey) return;
     // Alt + setas move o cartão: ←/→ entre colunas, ↑/↓ dentro da coluna.
-    const column = columns[columnIndex];
+    const cols = visibleColumns;
+    const column = cols[columnIndex];
     let target: { columnId: string; index: number } | null = null;
-    if (e.key === "ArrowLeft" && columnIndex > 0) target = { columnId: columns[columnIndex - 1].id, index: columns[columnIndex - 1].cards.length };
-    if (e.key === "ArrowRight" && columnIndex < columns.length - 1) target = { columnId: columns[columnIndex + 1].id, index: columns[columnIndex + 1].cards.length };
+    if (e.key === "ArrowLeft" && columnIndex > 0) target = { columnId: cols[columnIndex - 1].id, index: cols[columnIndex - 1].cards.length };
+    if (e.key === "ArrowRight" && columnIndex < cols.length - 1) target = { columnId: cols[columnIndex + 1].id, index: cols[columnIndex + 1].cards.length };
     if (e.key === "ArrowUp" && cardIndex > 0) target = { columnId: column.id, index: cardIndex - 1 };
     if (e.key === "ArrowDown" && cardIndex < column.cards.length - 1) target = { columnId: column.id, index: cardIndex + 2 };
     if (!target) return;
     e.preventDefault();
-    move(card.id, target.columnId, target.index);
+    move(card.id, target.columnId, realIndex(target.columnId, target.index));
     requestAnimationFrame(() => document.getElementById(`card-${card.id}`)?.focus());
   }
 
@@ -118,19 +148,21 @@ export function BoardView({ board, members, labels, permissions }: Props) {
     const cardId = e.dataTransfer.getData("text/plain");
     setDragging(null);
     setDropTarget(null);
-    if (cardId) move(cardId, columnId, index);
+    if (cardId) move(cardId, columnId, realIndex(columnId, index));
   }
 
   const totalCards = columns.reduce((n, c) => n + c.cards.length, 0);
+  const visibleCards = visibleColumns.reduce((n, c) => n + c.cards.length, 0);
   const openCard = openCardId ? columns.flatMap((c) => c.cards).find((c) => c.id === openCardId) : undefined;
 
   return (
     <main className="flex h-[calc(100dvh-3.5rem)] flex-col lg:h-dvh">
       <div className="flex flex-wrap items-end justify-between gap-4 px-4 pt-6 pb-5 sm:px-6 lg:px-8 lg:pt-8">
-        <div className="animate-rise">
+        <div className="min-w-0 animate-rise">
           <p className="eyebrow">Quadro</p>
-          <h1 className="page-title mt-1">{board.name}</h1>
+          <BoardSwitcher board={board} boards={boards} />
           <p className="page-subtitle">
+            {board.description ? `${board.description} · ` : ""}
             {totalCards === 0 ? "Nenhum cartão ainda" : `${totalCards} ${totalCards === 1 ? "cartão" : "cartões"} em ${columns.length} colunas`}
           </p>
         </div>
@@ -152,6 +184,21 @@ export function BoardView({ board, members, labels, permissions }: Props) {
         </span>
       </div>
 
+      <FilterBar
+        boardId={board.id}
+        filter={filter}
+        onChange={setFilter}
+        saved={saved}
+        onSavedChange={setSaved}
+        members={members}
+        labels={labels}
+        agents={agents}
+        canShare={permissions.manageColumns}
+        visible={visibleCards}
+        total={totalCards}
+        onResult={report}
+      />
+
       {error && (
         <div role="alert" className="alert-error mx-4 mb-3 animate-rise sm:mx-6 lg:mx-8">
           {error}
@@ -166,7 +213,7 @@ export function BoardView({ board, members, labels, permissions }: Props) {
       )}
 
       <div className="flex flex-1 snap-x gap-4 overflow-x-auto px-4 pb-6 sm:px-6 lg:px-8">
-        {columns.map((column, columnIndex) => (
+        {visibleColumns.map((column, columnIndex) => (
           <section
             key={column.id}
             aria-labelledby={`column-${column.id}`}
@@ -184,7 +231,14 @@ export function BoardView({ board, members, labels, permissions }: Props) {
             }}
             onDrop={(e) => onDrop(e, column.id, dropTarget?.columnId === column.id ? dropTarget.index : column.cards.length)}
           >
-            <ColumnHeader column={column} canManage={permissions.manageColumns} onResult={report} index={columnIndex} total={columns.length} />
+            <ColumnHeader
+              column={column}
+              totalCards={filtering ? columns[columnIndex].cards.length : undefined}
+              canManage={permissions.manageColumns}
+              onResult={report}
+              index={columnIndex}
+              total={columns.length}
+            />
 
             <ol className="flex min-h-16 flex-1 flex-col gap-2 overflow-y-auto px-2.5 pt-0.5 pb-2.5">
               {column.cards.map((card, cardIndex) => (
@@ -233,7 +287,7 @@ export function BoardView({ board, members, labels, permissions }: Props) {
               {column.cards.length === 0 && dropTarget?.columnId === column.id && <DropIndicator />}
               {column.cards.length === 0 && dropTarget?.columnId !== column.id && (
                 <li className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-slate-300/80 px-3 py-8 text-center text-xs text-slate-400 dark:border-slate-700/70 dark:text-slate-500">
-                  {permissions.moveCard ? "Arraste cartões para cá" : "Nenhum cartão"}
+                  {filtering ? "Nenhum cartão neste filtro" : permissions.moveCard ? "Arraste cartões para cá" : "Nenhum cartão"}
                 </li>
               )}
             </ol>
@@ -252,8 +306,14 @@ export function BoardView({ board, members, labels, permissions }: Props) {
           columns={columns.map((c) => ({ id: c.id, name: c.name }))}
           members={members}
           labels={labels}
+          agents={agents}
+          boards={boards.filter((b) => b.id !== board.id)}
           permissions={permissions}
-          onClose={() => setOpenCardId(null)}
+          onClose={() => {
+            setOpenCardId(null);
+            // Tira o ?cartao= da URL, para recarregar a página sem reabrir o cartão.
+            if (initialCardId) router.replace(`/boards/${board.id}`, { scroll: false });
+          }}
           onMove={(toColumnId) => move(openCard.id, toColumnId, columns.find((c) => c.id === toColumnId)?.cards.length ?? 0)}
           onResult={report}
         />
@@ -278,7 +338,7 @@ function DropIndicator() {
 function CardSummary({ card, draggable }: { card: BoardCard; draggable: boolean }) {
   const done = card.checklist.filter((i) => i.done).length;
   const overdue = card.dueDate && new Date(card.dueDate) < new Date();
-  const hasMeta = card.dueDate || card.checklist.length > 0 || card.assignee;
+  const hasMeta = card.dueDate || card.checklist.length > 0 || card.assignee || card.agent;
   return (
     <>
       {card.ticket && <span aria-hidden className={`absolute inset-y-0 left-0 w-1 ${PRIORITY_BAR[card.ticket.priority]}`} />}
@@ -318,6 +378,16 @@ function CardSummary({ card, draggable }: { card: BoardCard; draggable: boolean 
               </span>
             )}
           </div>
+          <span className="flex shrink-0 items-center -space-x-1.5">
+          {card.agent && (
+            <span
+              title={`Agente: ${card.agent.name}`}
+              className={`grid size-6 shrink-0 place-items-center rounded-full ring-2 ring-white dark:ring-slate-800 ${accent(card.agent.color).soft}`}
+            >
+              <Bot className="size-3.5" aria-hidden />
+              <span className="sr-only">Agente {card.agent.name}</span>
+            </span>
+          )}
           {card.assignee && (
             <span
               title={card.assignee.name}
@@ -327,6 +397,7 @@ function CardSummary({ card, draggable }: { card: BoardCard; draggable: boolean 
               <span className="sr-only">{card.assignee.name}</span>
             </span>
           )}
+          </span>
         </div>
       )}
     </>
@@ -334,9 +405,10 @@ function CardSummary({ card, draggable }: { card: BoardCard; draggable: boolean 
 }
 
 function ColumnHeader({
-  column, canManage, onResult, index, total,
+  column, totalCards, canManage, onResult, index, total,
 }: {
   column: Column;
+  totalCards?: number;
   canManage: boolean;
   onResult: (r: actions.ActionResult<unknown>) => boolean;
   index: number;
@@ -369,7 +441,7 @@ function ColumnHeader({
         <span aria-hidden className={`size-2 rounded-full ${COLUMN_ACCENTS[index % COLUMN_ACCENTS.length]}`} />
         {column.name}
         <span className="rounded-full bg-slate-200/80 px-2 py-0.5 text-[11px] font-medium text-slate-600 tabular-nums dark:bg-slate-800 dark:text-slate-400">
-          {column.cards.length}
+          {totalCards === undefined ? column.cards.length : `${column.cards.length}/${totalCards}`}
         </span>
       </h2>
       {canManage && (
@@ -503,5 +575,41 @@ function NewColumnForm({ boardId, onResult }: { boardId: string; onResult: (r: a
         <button className="btn" disabled={pending}>Criar</button>
       </div>
     </form>
+  );
+}
+
+/** Título do quadro com a troca rápida para os outros quadros da equipe. */
+function BoardSwitcher({ board, boards }: { board: BoardData; boards: BoardOption[] }) {
+  const ref = useRef<HTMLDetailsElement>(null);
+  return (
+    <details ref={ref} className="relative mt-1">
+      <summary className="group flex cursor-pointer list-none items-center gap-2 rounded-lg [&::-webkit-details-marker]:hidden">
+        <span aria-hidden className={`size-2.5 shrink-0 rounded-full ${accent(board.color).dot}`} />
+        <h1 className="page-title truncate">{board.name}</h1>
+        <ChevronDown className="size-5 shrink-0 text-slate-400 transition group-open:rotate-180 group-hover:text-slate-600" aria-hidden />
+        <span className="sr-only">Trocar de quadro</span>
+      </summary>
+      <div className="menu right-auto left-0 w-72">
+        <p className="eyebrow px-2.5 pt-1 pb-1.5">Quadros da equipe</p>
+        <ul className="max-h-72 overflow-y-auto">
+          {boards.map((b) => (
+            <li key={b.id}>
+              <Link
+                href={`/boards/${b.id}`}
+                aria-current={b.id === board.id ? "page" : undefined}
+                onClick={() => ref.current?.removeAttribute("open")}
+                className="menu-item flex items-center gap-2"
+              >
+                <span aria-hidden className={`size-2 shrink-0 rounded-full ${accent(b.color).dot}`} />
+                <span className="flex-1 truncate">{b.name}</span>
+                {b.id === board.id && <Check className="size-4 text-brand-600" aria-hidden />}
+              </Link>
+            </li>
+          ))}
+        </ul>
+        <div className="my-1 h-px bg-slate-100 dark:bg-slate-800" aria-hidden />
+        <Link href="/boards" className="menu-item flex items-center gap-2"><LayoutGrid className="size-4" aria-hidden /> Todos os quadros</Link>
+      </div>
+    </details>
   );
 }

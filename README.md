@@ -42,6 +42,9 @@ As seis fases do cronograma estão implementadas:
 | RF-10 | Indicadores de tempo, volume e resolução | `src/lib/metrics.ts` |
 | RF-11 | Automações do quadro | `src/lib/automations.ts` |
 | RF-12 | Vincular cartão a PR (GitHub/GitLab) | `src/lib/code-links.ts` |
+| RF-13 | Vários quadros, com quadro de entrada dos chamados | `src/lib/boards.ts` (`createBoard`, `setIntakeBoard`, `moveCardToBoard`), `/boards` |
+| RF-14 | Agentes criados pela equipe, atribuíveis a cartões | `src/lib/custom-agents.ts`, `/agentes` |
+| RF-15 | Busca global (Ctrl+K) e filtros salvos no quadro | `src/lib/search.ts`, `src/lib/board-filters.ts` |
 
 ## Papéis
 
@@ -77,7 +80,17 @@ Exportar a lista de chamados é restrito a coordenador e administrador.
 | Execução | Catálogo de ações e alvos | Ações da lista de permitidas | Sim, em toda ação |
 | Resumo | Ações e chamados do período | Relatório | Não |
 
-Controles comuns a todos os agentes, configurados em `/admin/agentes`:
+### Agentes da equipe
+
+Além dos agentes de sistema, coordenadores e administradores criam agentes próprios em `/agentes`:
+nome, função, instruções e cor, partindo de modelos prontos (analista de incidentes, redator de
+respostas, planejador de tarefas, revisor de segurança). Atribuído a um cartão, o agente lê o
+cartão, o chamado com a conversa e, se ativado, a base de conhecimento, e deixa a análise no
+cartão. Ele não altera nada sozinho. Qualquer técnico pode pedir uma nova análise com uma
+instrução extra ("foque nos riscos"). Cada execução respeita o teto de custo de IA e fica no
+log de auditoria.
+
+Controles comuns aos agentes de sistema, configurados em `/admin/agentes`:
 
 - **Lista de permitidas**: só as ações que o administrador liberou podem rodar.
 - **Limites**: execuções por minuto e por dia.

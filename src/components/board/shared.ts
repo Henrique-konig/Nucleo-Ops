@@ -18,3 +18,6 @@ export const LABEL_COLORS: Record<string, string> = {
 export const LABEL_COLOR_NAMES: Record<string, string> = {
   slate: "Cinza", red: "Vermelho", amber: "Âmbar", green: "Verde", sky: "Azul", violet: "Violeta", pink: "Rosa",
 };
+
+export type AgentOption = { id: string; name: string; role: string; color: string };
+export type BoardOption = { id: string; name: string; color: string };

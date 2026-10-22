@@ -130,4 +130,41 @@ export class LocalProvider implements AiProvider {
     for (const key of Object.keys(match.params)) if (key.toLowerCase().includes("email") && email) params[key] = email;
     return { data: { actionKey: match.key, params, reason: `O chamado menciona "${match.label}".` }, usage: null };
   };
+
+  // Sem modelo, o agente organiza o que já se sabe do cartão: situação, pendências e
+  // o trecho mais relevante da base. Útil como ponto de partida e em testes.
+  runAgent: AiProvider["runAgent"] = async (input) => {
+    const { agent, card, ticket } = input;
+    const pending = card.checklist.filter((i) => !i.done);
+    const overdue = card.dueDate && card.dueDate < new Date().toISOString().slice(0, 10);
+    const [best] = relevant(input.sources, [card.title, card.description, ticket?.title, ticket?.description, input.request].filter(Boolean).join(" "));
+    const lastRequester = ticket && [...ticket.conversation].reverse().find((m) => m.from === "solicitante");
+
+    const situation = [
+      `Cartão "${card.title}" em **${card.column}** (${card.board})${card.assignee ? `, com ${card.assignee}` : ", sem responsável"}.`,
+      card.dueDate ? `Prazo: ${card.dueDate}${overdue ? " (atrasado)" : ""}.` : null,
+      ticket ? `Chamado ${ticket.status.toLowerCase()} de prioridade ${ticket.priority.toLowerCase()}${ticket.category ? `, categoria ${ticket.category}` : ""}.` : null,
+      lastRequester ? `Última mensagem do solicitante: "${excerpt(lastRequester.content, 200)}"` : null,
+    ].filter(Boolean);
+
+    const steps = [
+      !card.assignee ? "Definir um responsável." : null,
+      overdue ? "Renegociar o prazo ou priorizar este cartão." : null,
+      ...pending.slice(0, 5).map((i) => `Concluir: ${i.text}`),
+      best ? `Seguir a orientação de "${best.title}".` : null,
+      ticket && ticket.status === "WAITING" ? "Cobrar retorno do solicitante." : null,
+    ].filter(Boolean);
+
+    const output = [
+      `**${agent.name}** · ${agent.role}`,
+      input.request ? `> Pedido: ${input.request}` : null,
+      `### Situação\n${situation.map((l) => `- ${l}`).join("\n")}`,
+      card.checklist.length ? `### Checklist\n${card.checklist.length - pending.length} de ${card.checklist.length} itens concluídos.` : null,
+      `### Próximos passos\n${(steps.length ? steps : ["Revisar a descrição e mover o cartão para a próxima etapa."]).map((l, i) => `${i + 1}. ${l}`).join("\n")}`,
+      best ? `### Da base de conhecimento\n${excerpt(best.content, 500)}` : null,
+      "> Modo local, sem modelo de IA: análise feita por regras. Configure `ANTHROPIC_API_KEY` para que o agente siga as instruções completas.",
+    ].filter(Boolean).join("\n\n");
+
+    return { data: { output, usedSourceIds: best ? [best.id] : [] }, usage: null };
+  };
 }

@@ -2,16 +2,21 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Archive, CheckSquare, ExternalLink, GitPullRequest, Tag, Trash2, X } from "lucide-react";
+import { useRouter } from "next/navigation";
 import type { BoardCard } from "@/lib/boards";
 import * as actions from "@/app/(app)/boards/[boardId]/actions";
 import type { BoardPermissions } from "./board-view";
-import { LABEL_COLOR_NAMES, LABEL_COLORS, type LabelOption, type MemberOption } from "./shared";
+import { AgentPanel } from "./agent-panel";
+import { LABEL_COLOR_NAMES, LABEL_COLORS, type AgentOption, type BoardOption, type LabelOption, type MemberOption } from "./shared";
 
 type Props = {
   card: BoardCard;
   columns: { id: string; name: string }[];
   members: MemberOption[];
   labels: LabelOption[];
+  agents: AgentOption[];
+  // Outros quadros da equipe, para mover o cartão.
+  boards: BoardOption[];
   permissions: BoardPermissions;
   onClose: () => void;
   onMove: (toColumnId: string) => void;
@@ -23,7 +28,8 @@ function toDateInput(date: Date | string | null) {
   return date ? new Date(date).toISOString().slice(0, 10) : "";
 }
 
-export function CardDialog({ card, columns, members, labels, permissions, onClose, onMove, onResult }: Props) {
+export function CardDialog({ card, columns, members, labels, agents, boards, permissions, onClose, onMove, onResult }: Props) {
+  const router = useRouter();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [pending, startTransition] = useTransition();
   const [labelOptions, setLabelOptions] = useState(labels);
@@ -45,6 +51,7 @@ export function CardDialog({ card, columns, members, labels, permissions, onClos
           description: String(fd.get("description") ?? "") || null,
           dueDate: dueDate ? `${dueDate}T00:00:00.000Z` : null,
           labelIds: fd.getAll("labelIds").map(String),
+          agentId: String(fd.get("agentId") ?? "") || null,
           ...(permissions.assign && { assigneeId: String(fd.get("assigneeId") ?? "") || null }),
         }),
       );
@@ -99,6 +106,19 @@ export function CardDialog({ card, columns, members, labels, permissions, onClos
                 </select>
               </label>
             </div>
+            {(agents.length > 0 || card.agent) && (
+              <label className="block space-y-1">
+                <span className="field-label">Agente</span>
+                <select name="agentId" defaultValue={card.agent?.id ?? ""} className="input">
+                  <option value="">Nenhum</option>
+                  {card.agent && !agents.some((a) => a.id === card.agent!.id) && <option value={card.agent.id}>{card.agent.name} (desligado)</option>}
+                  {agents.map((a) => (
+                    <option key={a.id} value={a.id}>{a.name} — {a.role}</option>
+                  ))}
+                </select>
+                <span className="block text-xs text-slate-500 dark:text-slate-400">O agente lê o cartão e o chamado e deixa a análise aqui. Ele não altera nada sozinho.</span>
+              </label>
+            )}
             <fieldset className="space-y-1">
               <legend className="field-label mb-1.5 flex items-center gap-1.5"><Tag className="size-3.5" aria-hidden /> Etiquetas</legend>
               <div className="flex flex-wrap gap-2">
@@ -117,20 +137,49 @@ export function CardDialog({ card, columns, members, labels, permissions, onClos
 
         {!readOnly && <NewLabelForm onCreated={(l) => setLabelOptions((ls) => [...ls, l])} onResult={onResult} />}
 
+        <AgentPanel card={card} agents={agents} canRun={permissions.runAgents} onResult={onResult} />
+
         <Checklist card={card} readOnly={readOnly} onResult={onResult} />
 
         <CodeLinks card={card} readOnly={readOnly} onResult={onResult} />
 
         <div className="flex flex-wrap items-end justify-between gap-3 border-t border-slate-100 pt-5 dark:border-slate-800">
           {permissions.moveCard && (
-            <label className="space-y-1">
-              <span className="field-label block">Mover para a coluna</span>
-              <select className="input" value={card.columnId} onChange={(e) => onMove(e.target.value)}>
-                {columns.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-            </label>
+            <div className="flex flex-wrap gap-3">
+              <label className="space-y-1">
+                <span className="field-label block">Mover para a coluna</span>
+                <select className="input" value={card.columnId} onChange={(e) => onMove(e.target.value)}>
+                  {columns.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </label>
+              {boards.length > 0 && (
+                <label className="space-y-1">
+                  <span className="field-label block">Mover para outro quadro</span>
+                  <select
+                    className="input"
+                    value=""
+                    disabled={pending}
+                    onChange={(e) => {
+                      const target = boards.find((b) => b.id === e.target.value);
+                      if (!target || !confirm(`Mover o cartão para o quadro "${target.name}"? Ele entra na primeira coluna.`)) return;
+                      startTransition(async () => {
+                        if (onResult(await actions.moveCardToBoard({ cardId: card.id, boardId: target.id }))) {
+                          onClose();
+                          router.refresh();
+                        }
+                      });
+                    }}
+                  >
+                    <option value="">Escolha o quadro</option>
+                    {boards.map((b) => (
+                      <option key={b.id} value={b.id}>{b.name}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
+            </div>
           )}
           {!readOnly && (
             <button

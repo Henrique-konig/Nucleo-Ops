@@ -18,6 +18,10 @@ export const PERMISSIONS = {
   "execution:view": ["TECHNICIAN", "COORDINATOR", "ADMIN", "AUDITOR"],
   "team:manage": ["ADMIN"],
   "column:manage": ["COORDINATOR", "ADMIN"],
+  // Criar, renomear e excluir quadros.
+  "board:manage": ["COORDINATOR", "ADMIN"],
+  // Agentes personalizados (nome, função, instruções). Os agentes de sistema ficam em "agent:manage".
+  "agent:create": ["COORDINATOR", "ADMIN"],
   "automation:configure": ["COORDINATOR", "ADMIN"],
   "user:manage": ["ADMIN"],
   "integration:manage": ["ADMIN"],
@@ -59,9 +63,11 @@ const PERMISSION_LABELS: Partial<Record<Permission, { label: string; group: Perm
   "card:assign": { label: "Atribuir responsável", group: "Chamados e quadro" },
   "card:prioritize": { label: "Mudar prioridade", group: "Chamados e quadro" },
   "column:manage": { label: "Gerenciar colunas", group: "Chamados e quadro" },
+  "board:manage": { label: "Criar, editar e excluir quadros", group: "Chamados e quadro" },
   "ticket:export": { label: "Exportar chamados (CSV/PDF)", group: "Chamados e quadro" },
   "kb:edit": { label: "Editar a base de conhecimento", group: "Conhecimento e IA" },
   "ai:use": { label: "Usar a IA nos chamados", group: "Conhecimento e IA" },
+  "agent:create": { label: "Criar e editar agentes da equipe", group: "Conhecimento e IA" },
   "execution:propose": { label: "Propor execuções", group: "Execuções" },
   "execution:approve": { label: "Aprovar execuções", group: "Execuções" },
   "execution:approve_sensitive": { label: "Aprovar execuções sensíveis (produção)", group: "Execuções" },

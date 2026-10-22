@@ -4,11 +4,12 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Activity, BarChart3, BookOpen, ChevronsLeft, FileText, Inbox, KanbanSquare, LogOut, Menu, Monitor, Moon,
+  Activity, BarChart3, BookOpen, Bot, ChevronsLeft, Search, FileText, Inbox, KanbanSquare, LogOut, Menu, Monitor, Moon,
   Settings, ShieldCheck, Sun, Ticket, X, Zap, type LucideIcon,
 } from "lucide-react";
 import type { NavGroup } from "@/lib/nav";
 import { initials } from "@/lib/initials";
+import { OPEN_PALETTE_EVENT } from "./command-palette";
 
 type Item = { href: string; label: string; group: NavGroup };
 
@@ -17,6 +18,7 @@ const ICONS: Record<string, LucideIcon> = {
   "/boards": KanbanSquare,
   "/chamados": Ticket,
   "/base": BookOpen,
+  "/agentes": Bot,
   "/execucoes": Zap,
   "/indicadores": BarChart3,
   "/relatorios": FileText,
@@ -71,6 +73,7 @@ export function Sidebar({ items, user, signOut }: Props) {
 
   const nav = (compact: boolean) => (
     <nav aria-label="Principal" className="flex-1 space-y-6 overflow-y-auto px-3 py-2">
+      <SearchButton compact={compact} />
       {Object.entries(groups).map(([group, groupItems]) => (
         <div key={group} className="space-y-1">
           {!compact && <p className="eyebrow px-2.5 pb-1">{group}</p>}
@@ -144,9 +147,14 @@ export function Sidebar({ items, user, signOut }: Props) {
       {/* Barra superior no celular */}
       <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-slate-200/80 bg-slate-50/80 px-4 backdrop-blur-xl lg:hidden dark:border-slate-800 dark:bg-slate-950/80">
         <Link href="/" aria-label="Início"><Logo /></Link>
+        <span className="flex items-center gap-1">
+        <button className="icon-btn" aria-label="Buscar" onClick={() => window.dispatchEvent(new Event(OPEN_PALETTE_EVENT))}>
+          <Search className="size-5" aria-hidden />
+        </button>
         <button className="icon-btn" aria-label="Abrir menu" aria-expanded={mobileOpen} onClick={() => setMobileOpen(true)}>
           <Menu className="size-5" aria-hidden />
         </button>
+        </span>
       </header>
 
       {/* Gaveta no celular */}
@@ -189,6 +197,28 @@ export function Sidebar({ items, user, signOut }: Props) {
         {footer(collapsed)}
       </aside>
     </>
+  );
+}
+
+function SearchButton({ compact }: { compact: boolean }) {
+  const [mac, setMac] = useState(false);
+  useEffect(() => setMac(/Mac|iPhone|iPad/.test(navigator.platform)), []);
+  return (
+    <button
+      type="button"
+      onClick={() => window.dispatchEvent(new Event(OPEN_PALETTE_EVENT))}
+      title={compact ? "Buscar (Ctrl+K)" : undefined}
+      aria-keyshortcuts="Control+K Meta+K"
+      className={`flex w-full items-center gap-2.5 rounded-lg border border-slate-200/80 bg-white/70 px-2.5 py-1.5 text-sm text-slate-500 shadow-card transition hover:border-slate-300 hover:text-slate-800 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-400 dark:hover:border-slate-700 dark:hover:text-slate-200 ${compact ? "justify-center" : ""}`}
+    >
+      <Search className="size-4 shrink-0" aria-hidden />
+      {compact ? <span className="sr-only">Buscar</span> : (
+        <>
+          <span className="flex-1 text-left">Buscar…</span>
+          <kbd className="rounded border border-slate-200 px-1 font-sans text-[10px] dark:border-slate-700">{mac ? "⌘" : "Ctrl"} K</kbd>
+        </>
+      )}
+    </button>
   );
 }
 

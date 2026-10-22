@@ -9,6 +9,9 @@ import type { Prisma } from "@/generated/prisma/client";
 import { BusinessError, NotFoundError, type Actor } from "@/lib/errors";
 import { applyStatus } from "@/lib/tickets";
 import { runColumnAutomations } from "@/lib/automations";
+import { customAgentOptions, queueAgentRun } from "@/lib/custom-agents";
+import { boardFilterSchema, cleanFilter } from "@/lib/board-filters";
+import { DEFAULT_COLUMNS } from "@/lib/team-defaults";
 
 // Regras do quadro de tarefas. Cada operação valida permissão e equipe, e grava
 // a mudança e o registro de auditoria na mesma transação.
@@ -17,6 +20,7 @@ export { NotFoundError, type Actor } from "@/lib/errors";
 
 const cardInclude = {
   assignee: { select: { id: true, name: true } },
+  agent: { select: { id: true, name: true, color: true } },
   labels: { select: { id: true, name: true, color: true }, orderBy: { name: "asc" } },
   checklist: { select: { id: true, text: true, done: true, position: true }, orderBy: { position: "asc" } },
   ticket: { select: { id: true, priority: true, status: true, channel: true } },
@@ -45,25 +49,49 @@ export type BoardCard = BoardData["columns"][number]["cards"][number];
 
 export async function listBoards(actor: Actor) {
   assertCan(actor.role, "board:view");
-  return db.board.findMany({ where: { teamId: actor.teamId }, orderBy: { createdAt: "asc" } });
+  const boards = await db.board.findMany({
+    where: { teamId: actor.teamId },
+    orderBy: { createdAt: "asc" },
+    include: { _count: { select: { columns: true, cards: { where: { archivedAt: null } } } } },
+  });
+  const [overdue, mine] = await Promise.all([
+    db.card.groupBy({ by: ["boardId"], where: { board: { teamId: actor.teamId }, archivedAt: null, dueDate: { lt: new Date() } }, _count: true }),
+    db.card.groupBy({ by: ["boardId"], where: { board: { teamId: actor.teamId }, archivedAt: null, assigneeId: actor.id }, _count: true }),
+  ]);
+  // Sem quadro marcado como entrada, o mais antigo recebe os chamados.
+  const intakeId = (boards.find((b) => b.intake) ?? boards[0])?.id;
+  return boards.map(({ _count, ...b }) => ({
+    ...b,
+    isIntake: b.id === intakeId,
+    columnCount: _count.columns,
+    cardCount: _count.cards,
+    overdueCount: overdue.find((o) => o.boardId === b.id)?._count ?? 0,
+    mineCount: mine.find((o) => o.boardId === b.id)?._count ?? 0,
+  }));
 }
 
+export type BoardSummary = Awaited<ReturnType<typeof listBoards>>[number];
+
 export async function getBoardOptions(actor: Actor) {
-  const [members, labels] = await Promise.all([
+  const [members, labels, agents, boards] = await Promise.all([
     db.user.findMany({
       where: { teamId: actor.teamId, active: true, role: { in: ["TECHNICIAN", "COORDINATOR", "ADMIN"] } },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
     db.label.findMany({ where: { teamId: actor.teamId }, select: { id: true, name: true, color: true }, orderBy: { name: "asc" } }),
+    customAgentOptions(actor),
+    db.board.findMany({ where: { teamId: actor.teamId }, select: { id: true, name: true, color: true }, orderBy: { createdAt: "asc" } }),
   ]);
-  return { members, labels };
+  return { members, labels, agents, boards };
 }
 
 // ---------------------------------------------------------------------------
 // Validação de entrada
 
 const id = z.string().min(1).max(64);
+
+export const BOARD_COLORS = ["brand", "sky", "emerald", "amber", "rose", "violet", "slate"] as const;
 const title = z.string().trim().min(1, "Informe um título").max(200);
 const name = z.string().trim().min(1, "Informe um nome").max(60);
 
@@ -76,6 +104,7 @@ export const schemas = {
     description: z.string().max(10_000).nullable().optional(),
     dueDate: z.coerce.date().nullable().optional(),
     assigneeId: id.nullable().optional(),
+    agentId: id.nullable().optional(),
     labelIds: z.array(id).max(20).optional(),
   }),
   archiveCard: z.object({ cardId: id }),
@@ -91,6 +120,25 @@ export const schemas = {
     ticketStatus: z.enum(["OPEN", "IN_PROGRESS", "WAITING", "RESOLVED", "CLOSED"]).nullable(),
   }),
   createLabel: z.object({ name: z.string().trim().min(1).max(40), color: z.enum(["slate", "red", "amber", "green", "sky", "violet", "pink"]) }),
+  createBoard: z.object({
+    name,
+    description: z.string().trim().max(300).optional(),
+    color: z.enum(BOARD_COLORS).default("brand"),
+    // Colunas iniciais: as padrão do atendimento, nenhuma, ou copiadas de outro quadro.
+    template: z.enum(["default", "blank", "copy"]).default("default"),
+    copyFromBoardId: id.optional(),
+  }),
+  updateBoard: z.object({
+    boardId: id,
+    name,
+    description: z.string().trim().max(300).nullable().optional(),
+    color: z.enum(BOARD_COLORS),
+  }),
+  setIntakeBoard: z.object({ boardId: id }),
+  deleteBoard: z.object({ boardId: id }),
+  moveCardToBoard: z.object({ cardId: id, boardId: id }),
+  saveFilter: z.object({ boardId: id, name: z.string().trim().min(1, "Dê um nome ao filtro").max(40), filters: boardFilterSchema, shared: z.boolean().default(false) }),
+  deleteFilter: z.object({ filterId: id }),
 };
 
 type Input<K extends keyof typeof schemas> = z.input<(typeof schemas)[K]>;
@@ -197,6 +245,13 @@ export async function updateCard(actor: Actor, input: Input<"updateCard">) {
       const count = await tx.label.count({ where: { id: { in: labelIds }, teamId: actor.teamId } });
       if (count !== new Set(labelIds).size) throw new NotFoundError("Etiqueta");
     }
+    let agentToRun: string | null = null;
+    if (fields.agentId !== undefined && fields.agentId !== card.agentId && fields.agentId) {
+      const agent = await tx.customAgent.findFirst({ where: { id: fields.agentId, teamId: actor.teamId } });
+      if (!agent) throw new NotFoundError("Agente");
+      if (!agent.active) throw new BusinessError(`O agente ${agent.name} está desligado`);
+      if (agent.runOnAssign) agentToRun = agent.id;
+    }
 
     const updated = await tx.card.update({
       where: { id: card.id },
@@ -221,6 +276,8 @@ export async function updateCard(actor: Actor, input: Input<"updateCard">) {
         payload: changes as Prisma.InputJsonValue,
       });
     }
+    // Agente recém-atribuído começa a trabalhar no cartão.
+    if (agentToRun) await queueAgentRun(tx, { teamId: actor.teamId, agentId: agentToRun, cardId: card.id, requestedById: actor.id });
     // Novo responsável (que não seja quem atribuiu) recebe aviso por e-mail.
     if (changes.assigneeId && fields.assigneeId && fields.assigneeId !== actor.id) {
       await enqueue(tx, { teamId: actor.teamId, type: "notify.assignee", payload: { cardId: card.id, assigneeId: fields.assigneeId, byUserId: actor.id } });
@@ -388,5 +445,209 @@ export async function createLabel(actor: Actor, input: Input<"createLabel">) {
       payload: { name: label.name, color: label.color },
     });
     return label;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Quadros
+
+export async function createBoard(actor: Actor, input: Input<"createBoard">) {
+  assertCan(actor.role, "board:manage");
+  const data = schemas.createBoard.parse(input);
+  return db.$transaction(async (tx) => {
+    let columns: { name: string; ticketStatus: Prisma.ColumnCreateWithoutBoardInput["ticketStatus"] }[] = [];
+    if (data.template === "default") columns = DEFAULT_COLUMNS;
+    if (data.template === "copy") {
+      const source = data.copyFromBoardId
+        ? await tx.board.findFirst({ where: { id: data.copyFromBoardId, teamId: actor.teamId }, include: { columns: { orderBy: { position: "asc" } } } })
+        : null;
+      if (!source) throw new NotFoundError("Quadro de origem");
+      columns = source.columns.map((c) => ({ name: c.name, ticketStatus: c.ticketStatus }));
+    }
+    const board = await tx.board.create({
+      data: {
+        teamId: actor.teamId,
+        name: data.name,
+        description: data.description || null,
+        color: data.color,
+        columns: { create: columns.map((c, i) => ({ name: c.name, ticketStatus: c.ticketStatus, position: (i + 1) * 1024 })) },
+      },
+    });
+    await recordAction(tx, {
+      teamId: actor.teamId, userId: actor.id, type: "board.create", targetType: "board", targetId: board.id,
+      payload: { name: board.name, template: data.template, ...(data.copyFromBoardId && { copyFromBoardId: data.copyFromBoardId }) },
+    });
+    return board;
+  });
+}
+
+export async function updateBoard(actor: Actor, input: Input<"updateBoard">) {
+  assertCan(actor.role, "board:manage");
+  const { boardId, ...fields } = schemas.updateBoard.parse(input);
+  return db.$transaction(async (tx) => {
+    const board = await tx.board.findFirst({ where: { id: boardId, teamId: actor.teamId } });
+    if (!board) throw new NotFoundError("Quadro");
+    const next = { name: fields.name, description: fields.description || null, color: fields.color };
+    const changes: Record<string, { from: unknown; to: unknown }> = {};
+    for (const key of Object.keys(next) as (keyof typeof next)[]) {
+      if (board[key] !== next[key]) changes[key] = { from: board[key], to: next[key] };
+    }
+    if (Object.keys(changes).length === 0) return board;
+    const updated = await tx.board.update({ where: { id: board.id }, data: next });
+    await recordAction(tx, {
+      teamId: actor.teamId, userId: actor.id, type: "board.update", targetType: "board", targetId: board.id,
+      payload: changes as Prisma.InputJsonValue,
+    });
+    return updated;
+  });
+}
+
+/** Define o quadro que recebe os cartões dos chamados novos. */
+export async function setIntakeBoard(actor: Actor, input: Input<"setIntakeBoard">) {
+  assertCan(actor.role, "board:manage");
+  const data = schemas.setIntakeBoard.parse(input);
+  return db.$transaction(async (tx) => {
+    const board = await tx.board.findFirst({ where: { id: data.boardId, teamId: actor.teamId } });
+    if (!board) throw new NotFoundError("Quadro");
+    if ((await tx.column.count({ where: { boardId: board.id } })) === 0) {
+      throw new BusinessError("Crie ao menos uma coluna antes: os chamados entram na primeira");
+    }
+    await tx.board.updateMany({ where: { teamId: actor.teamId, intake: true }, data: { intake: false } });
+    await tx.board.update({ where: { id: board.id }, data: { intake: true } });
+    await recordAction(tx, { teamId: actor.teamId, userId: actor.id, type: "board.intake", targetType: "board", targetId: board.id });
+  });
+}
+
+/**
+ * Exclui um quadro sem cartões ativos. Os cartões arquivados vão para outro quadro,
+ * para que o histórico deles continue existindo.
+ */
+export async function deleteBoard(actor: Actor, input: Input<"deleteBoard">) {
+  assertCan(actor.role, "board:manage");
+  const data = schemas.deleteBoard.parse(input);
+  return db.$transaction(async (tx) => {
+    const board = await tx.board.findFirst({ where: { id: data.boardId, teamId: actor.teamId } });
+    if (!board) throw new NotFoundError("Quadro");
+    if ((await tx.card.count({ where: { boardId: board.id, archivedAt: null } })) > 0) {
+      throw new BusinessError("Mova ou arquive os cartões antes de excluir o quadro");
+    }
+    const others = await tx.board.findMany({
+      where: { teamId: actor.teamId, id: { not: board.id } },
+      orderBy: [{ intake: "desc" }, { createdAt: "asc" }],
+      include: { columns: { orderBy: { position: "asc" }, take: 1 } },
+    });
+    if (others.length === 0) throw new BusinessError("A equipe precisa de pelo menos um quadro");
+
+    const archived = await tx.card.count({ where: { boardId: board.id } });
+    if (archived > 0) {
+      const target = others.find((b) => b.columns.length > 0);
+      if (!target) throw new BusinessError("Nenhum outro quadro tem colunas para guardar os cartões arquivados");
+      await tx.card.updateMany({ where: { boardId: board.id }, data: { boardId: target.id, columnId: target.columns[0].id } });
+    }
+    await tx.board.delete({ where: { id: board.id } });
+    await recordAction(tx, {
+      teamId: actor.teamId, userId: actor.id, type: "board.delete", targetType: "board", targetId: board.id,
+      payload: { name: board.name, archivedCardsMoved: archived },
+    });
+  });
+}
+
+/** Leva o cartão para o fim da primeira coluna de outro quadro. */
+export async function moveCardToBoard(actor: Actor, input: Input<"moveCardToBoard">) {
+  assertCan(actor.role, "card:move");
+  const data = schemas.moveCardToBoard.parse(input);
+  return db.$transaction(async (tx) => {
+    const card = await findCard(tx, actor, data.cardId);
+    if (card.boardId === data.boardId) return card;
+    const toColumn = await tx.column.findFirst({ where: { boardId: data.boardId, board: { teamId: actor.teamId } }, orderBy: { position: "asc" } });
+    if (!toColumn) {
+      if (!(await tx.board.findFirst({ where: { id: data.boardId, teamId: actor.teamId } }))) throw new NotFoundError("Quadro");
+      throw new BusinessError("O quadro de destino não tem colunas");
+    }
+    const last = await tx.card.findFirst({ where: { columnId: toColumn.id, archivedAt: null }, orderBy: { position: "desc" } });
+    const moved = await tx.card.update({
+      where: { id: card.id },
+      data: { boardId: toColumn.boardId, columnId: toColumn.id, position: positionAt(last ? [last] : [], 1) },
+    });
+    await recordAction(tx, {
+      teamId: actor.teamId, userId: actor.id, type: "card.move_board", targetType: "card", targetId: card.id,
+      payload: { fromBoardId: card.boardId, toBoardId: toColumn.boardId, toColumnId: toColumn.id },
+    });
+    if (card.ticketId && toColumn.ticketStatus) {
+      const ticket = await tx.ticket.findUniqueOrThrow({ where: { id: card.ticketId } });
+      await applyStatus(tx, ticket, toColumn.ticketStatus, actor.id, { moveCard: false, byAgent: false });
+    }
+    await runColumnAutomations(tx, { cardId: card.id, columnId: toColumn.id, teamId: actor.teamId });
+    return moved;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Filtros salvos
+
+/** Os filtros da pessoa e os compartilhados pela equipe neste quadro. */
+export async function listSavedFilters(actor: Actor, boardId: string) {
+  assertCan(actor.role, "board:view");
+  const rows = await db.savedFilter.findMany({
+    where: { boardId, board: { teamId: actor.teamId }, OR: [{ userId: actor.id }, { shared: true }] },
+    orderBy: [{ shared: "asc" }, { createdAt: "asc" }],
+    include: { user: { select: { name: true } } },
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    shared: r.shared,
+    mine: r.userId === actor.id,
+    owner: r.user.name,
+    filters: boardFilterSchema.catch({}).parse(r.filters),
+  }));
+}
+
+export type SavedFilterItem = Awaited<ReturnType<typeof listSavedFilters>>[number];
+
+export async function saveFilter(actor: Actor, input: Input<"saveFilter">) {
+  assertCan(actor.role, "board:view");
+  const data = schemas.saveFilter.parse(input);
+  // Compartilhar com a equipe é decisão de quem organiza o quadro.
+  if (data.shared) assertCan(actor.role, "column:manage");
+  const filters = cleanFilter(data.filters);
+  if (Object.keys(filters).length === 0) throw new BusinessError("Escolha ao menos um critério antes de salvar");
+  return db.$transaction(async (tx) => {
+    const board = await tx.board.findFirst({ where: { id: data.boardId, teamId: actor.teamId } });
+    if (!board) throw new NotFoundError("Quadro");
+    if ((await tx.savedFilter.count({ where: { boardId: board.id, userId: actor.id } })) >= 20) {
+      throw new BusinessError("Limite de 20 filtros por quadro");
+    }
+    const saved = await tx.savedFilter.create({
+      data: { boardId: board.id, userId: actor.id, name: data.name, filters, shared: data.shared },
+    });
+    if (saved.shared) {
+      await recordAction(tx, {
+        teamId: actor.teamId, userId: actor.id, type: "filter.share", targetType: "saved_filter", targetId: saved.id,
+        payload: { boardId: board.id, name: saved.name, filters },
+      });
+    }
+    return { id: saved.id, name: saved.name, shared: saved.shared, mine: true, owner: "", filters };
+  });
+}
+
+export async function deleteFilter(actor: Actor, input: Input<"deleteFilter">) {
+  assertCan(actor.role, "board:view");
+  const data = schemas.deleteFilter.parse(input);
+  return db.$transaction(async (tx) => {
+    const filter = await tx.savedFilter.findFirst({ where: { id: data.filterId, board: { teamId: actor.teamId } } });
+    if (!filter) throw new NotFoundError("Filtro");
+    // O filtro compartilhado pode ser removido por quem organiza o quadro.
+    if (filter.userId !== actor.id) {
+      if (!filter.shared) throw new NotFoundError("Filtro");
+      assertCan(actor.role, "column:manage");
+    }
+    await tx.savedFilter.delete({ where: { id: filter.id } });
+    if (filter.shared) {
+      await recordAction(tx, {
+        teamId: actor.teamId, userId: actor.id, type: "filter.delete", targetType: "saved_filter", targetId: filter.id,
+        payload: { boardId: filter.boardId, name: filter.name },
+      });
+    }
   });
 }

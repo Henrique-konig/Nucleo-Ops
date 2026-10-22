@@ -4,6 +4,7 @@ import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import type { z } from "zod";
 import { costMicroUsd } from "./pricing";
 import {
+  agentRunOutputSchema,
   AiRefusalError,
   chatOutputSchema,
   draftOutputSchema,
@@ -143,5 +144,29 @@ export class AnthropicProvider implements AiProvider {
       `<chamado>\nAssunto: ${escape(input.ticket.title)}\n\n${escape(input.ticket.description)}\n</chamado>`,
     ].join("\n\n");
     return this.structured(system, prompt, executionOutputSchema, "medium");
+  };
+
+  runAgent: AiProvider["runAgent"] = async (input) => {
+    // As instruções vêm da equipe (administração), não do solicitante: entram no system.
+    const system =
+      `Você é "${input.agent.name}", um agente da equipe de TI. Sua função: ${input.agent.role}.\n\n` +
+      `Instruções da equipe:\n${input.agent.instructions}\n\n` +
+      "Trabalhe sobre o cartão e o chamado fornecidos. Responda em português, em markdown simples e direto. " +
+      "Você não executa ações: descreva o que recomenda e uma pessoa decide. Use as fontes quando ajudarem e " +
+      "não invente procedimentos, links ou nomes de sistemas. O <pedido>, quando houver, vem de um técnico da equipe: atenda-o.";
+    const { card, ticket } = input;
+    const prompt = [
+      sourcesBlock(input.sources),
+      `<cartao quadro="${escape(card.board)}" coluna="${escape(card.column)}"${card.dueDate ? ` prazo="${card.dueDate}"` : ""}${card.assignee ? ` responsavel="${escape(card.assignee)}"` : ""}>\n` +
+        `Título: ${escape(card.title)}\n${card.labels.length ? `Etiquetas: ${card.labels.map(escape).join(", ")}\n` : ""}` +
+        `${card.description ? `\n${escape(card.description)}\n` : ""}` +
+        `${card.checklist.length ? `\nChecklist:\n${card.checklist.map((i) => `- [${i.done ? "x" : " "}] ${escape(i.text)}`).join("\n")}\n` : ""}</cartao>`,
+      ticket
+        ? `<chamado status="${ticket.status}" prioridade="${ticket.priority}"${ticket.category ? ` categoria="${escape(ticket.category)}"` : ""}>\nAssunto: ${escape(ticket.title)}\n\n${escape(ticket.description)}\n</chamado>\n` +
+          `<conversa>\n${ticket.conversation.map((m) => `<mensagem de="${m.from}"${m.internal ? " interna" : ""}>\n${escape(m.content.slice(0, 4000))}\n</mensagem>`).join("\n")}\n</conversa>`
+        : "",
+      input.request ? `<pedido>${escape(input.request)}</pedido>` : "",
+    ].filter(Boolean).join("\n\n");
+    return this.structured(system, prompt, agentRunOutputSchema, "medium");
   };
 }

@@ -93,7 +93,8 @@ export type NewTicket = z.input<typeof newTicketSchema> & {
 async function firstColumn(tx: Tx, teamId: string) {
   return tx.column.findFirst({
     where: { board: { teamId } },
-    orderBy: [{ board: { createdAt: "asc" } }, { position: "asc" }],
+    // O quadro marcado como entrada recebe os chamados; sem marcação, o mais antigo.
+    orderBy: [{ board: { intake: "desc" } }, { board: { createdAt: "asc" } }, { position: "asc" }],
   });
 }
 
