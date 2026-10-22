@@ -2,7 +2,7 @@ import { requireUser } from "@/lib/session";
 import { listReports } from "@/lib/agents/summary";
 import { ActionForm } from "@/components/tickets/action-form";
 import { requestReportAction } from "./actions";
-import { CalendarDays, CalendarRange, FileText } from "lucide-react";
+import { CalendarDays, CalendarRange, FileDown, FileText } from "lucide-react";
 import { EmptyState, PageHeader } from "@/components/ui/page-header";
 
 export const metadata = { title: "Relatórios" };
@@ -58,12 +58,15 @@ export default async function ReportsPage() {
       ) : (
         reports.map((r) => (
           <article key={r.id} className="panel animate-rise space-y-3 p-5">
-            <h2 className="flex items-center gap-2 font-semibold">
-              <span className={`badge ${r.period === "DAILY" ? "bg-brand-50 text-brand-700 dark:bg-brand-950/60 dark:text-brand-300" : "bg-violet-50 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300"}`}>
-                {r.period === "DAILY" ? "Diário" : "Semanal"}
-              </span>
-              {r.period === "DAILY" ? fmt(r.periodStart) : `${fmt(r.periodStart)} a ${fmt(new Date(r.periodEnd.getTime() - 1))}`}
-            </h2>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="flex items-center gap-2 font-semibold">
+                <span className={`badge ${r.period === "DAILY" ? "bg-brand-50 text-brand-700 dark:bg-brand-950/60 dark:text-brand-300" : "bg-violet-50 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300"}`}>
+                  {r.period === "DAILY" ? "Diário" : "Semanal"}
+                </span>
+                {r.period === "DAILY" ? fmt(r.periodStart) : `${fmt(r.periodStart)} a ${fmt(new Date(r.periodEnd.getTime() - 1))}`}
+              </h2>
+              <a className="btn-ghost py-1 text-xs" href={`/api/relatorios/${r.id}/pdf`}><FileDown className="size-4" aria-hidden /> Baixar PDF</a>
+            </div>
             <ReportBody content={r.content} />
           </article>
         ))

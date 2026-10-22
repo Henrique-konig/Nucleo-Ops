@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { shortIdFromSubject, stripQuotedReply, ticketSubject } from "./email";
+import { emailConfigFromEnv, shortIdFromSubject, stripQuotedReply, ticketSubject } from "./email";
 
 describe("e-mail", () => {
   it("assunto carrega o número curto do chamado", () => {
@@ -14,5 +14,12 @@ describe("e-mail", () => {
     expect(stripQuotedReply("Resolvido, obrigado!\n\nOn Mon, Ana wrote:\n> antigo")).toBe("Resolvido, obrigado!");
     expect(stripQuotedReply("Oi\n> citado\nfim")).toBe("Oi\nfim");
     expect(stripQuotedReply("Ok\n-----Original Message-----\nDe: x")).toBe("Ok");
+  });
+
+  it("configura o envio pelas variáveis de ambiente", () => {
+    expect(emailConfigFromEnv({})).toBeNull();
+    expect(emailConfigFromEnv({ RESEND_API_KEY: "re_x" })).toBeNull();
+    expect(emailConfigFromEnv({ EMAIL_FROM: "TI <ti@empresa.com>" })).toEqual({ provider: "log", from: "TI <ti@empresa.com>" });
+    expect(emailConfigFromEnv({ EMAIL_FROM: " ti@empresa.com ", RESEND_API_KEY: " re_x " })).toEqual({ provider: "resend", apiKey: "re_x", from: "ti@empresa.com" });
   });
 });

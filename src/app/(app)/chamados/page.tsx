@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Inbox, Search, SlidersHorizontal } from "lucide-react";
+import { FileDown, FileSpreadsheet, Inbox, Search, SlidersHorizontal } from "lucide-react";
+import { can } from "@/lib/permissions";
 import { EmptyState, PageHeader } from "@/components/ui/page-header";
 import { requireUser } from "@/lib/session";
 import { CHANNEL_LABELS, listTickets, PRIORITY_LABELS, STATUS_LABELS, ticketFiltersSchema } from "@/lib/tickets";
@@ -17,10 +18,22 @@ export default async function TicketsPage({ searchParams }: PageProps<"/chamados
     listTickets(user, { status: "ACTIVE", ...filters }),
     db.team.findUniqueOrThrow({ where: { id: user.teamId }, select: { categories: true } }),
   ]);
+  // A exportação leva os mesmos filtros da tela.
+  const exportQs = (formato: "csv" | "pdf") =>
+    new URLSearchParams({ ...(Object.fromEntries(Object.entries(filters).filter(([, v]) => v)) as Record<string, string>), formato }).toString();
 
   return (
     <main className="mx-auto max-w-6xl space-y-6 px-4 py-8 sm:px-6 lg:px-10 lg:py-10">
-      <PageHeader title="Chamados" description={`${tickets.length} ${tickets.length === 1 ? "chamado encontrado" : "chamados encontrados"}`} />
+      <PageHeader
+        title="Chamados"
+        description={`${tickets.length} ${tickets.length === 1 ? "chamado encontrado" : "chamados encontrados"}`}
+        actions={can(user.role, "ticket:export") && (
+          <>
+            <a className="btn" href={`/api/chamados/exportar?${exportQs("csv")}`}><FileSpreadsheet className="size-4" aria-hidden /> Exportar CSV</a>
+            <a className="btn" href={`/api/chamados/exportar?${exportQs("pdf")}`}><FileDown className="size-4" aria-hidden /> Exportar PDF</a>
+          </>
+        )}
+      />
       <form className="panel flex flex-wrap items-end gap-3 p-3" role="search">
         <label className="min-w-56 flex-1 space-y-1">
           <span className="block text-xs font-medium text-slate-500 dark:text-slate-400">Busca</span>

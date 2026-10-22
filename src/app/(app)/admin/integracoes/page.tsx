@@ -9,7 +9,7 @@ import type { IntegrationType } from "@/generated/prisma/enums";
 export const metadata = { title: "Integrações" };
 
 const HELP: Record<IntegrationType, string> = {
-  EMAIL: "Recebe chamados por e-mail (Postmark ou formato genérico) e responde pelo Resend.",
+  EMAIL: "Recebe chamados por e-mail (Postmark ou formato genérico) e responde pelo Resend. Sem esta integração, os avisos por e-mail usam RESEND_API_KEY e EMAIL_FROM do ambiente.",
   SLACK: "Comando /plantao e avisos no canal da equipe. Escopos: commands, chat:write, users:read, users:read.email.",
   TEAMS: "Avisos por webhook de entrada; consultas pelo webhook de saída.",
   GITHUB: "Vincula pull requests a cartões (evento pull_request).",
