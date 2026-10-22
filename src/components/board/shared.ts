@@ -1,15 +1,18 @@
 export type MemberOption = { id: string; name: string };
 export type LabelOption = { id: string; name: string; color: string };
 
+// Cores do marcador de cada coluna, em sequência.
+export const COLUMN_ACCENTS = ["bg-slate-400", "bg-sky-500", "bg-amber-500", "bg-emerald-500", "bg-violet-500", "bg-pink-500"];
+
 // Classes completas (não interpoladas) para o Tailwind encontrá-las no build.
 export const LABEL_COLORS: Record<string, string> = {
-  slate: "bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-100",
-  red: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100",
-  amber: "bg-amber-100 text-amber-900 dark:bg-amber-900 dark:text-amber-100",
-  green: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100",
-  sky: "bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-100",
-  violet: "bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-100",
-  pink: "bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-100",
+  slate: "bg-slate-100 text-slate-700 dark:bg-slate-700/60 dark:text-slate-200",
+  red: "bg-red-50 text-red-700 dark:bg-red-950/60 dark:text-red-300",
+  amber: "bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300",
+  green: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300",
+  sky: "bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300",
+  violet: "bg-violet-50 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300",
+  pink: "bg-pink-50 text-pink-700 dark:bg-pink-950/60 dark:text-pink-300",
 };
 
 export const LABEL_COLOR_NAMES: Record<string, string> = {

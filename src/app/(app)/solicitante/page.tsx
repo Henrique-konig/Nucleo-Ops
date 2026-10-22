@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { ChevronRight, Inbox, PlusCircle } from "lucide-react";
+import { EmptyState, PageHeader } from "@/components/ui/page-header";
 import { requireUser } from "@/lib/session";
 import { listRequesterTickets } from "@/lib/tickets";
 import { db } from "@/lib/db";
@@ -19,7 +21,9 @@ export default async function RequesterPage() {
   ]);
 
   return (
-    <main className="mx-auto grid max-w-5xl gap-8 p-6 lg:grid-cols-[1fr_22rem]">
+    <main className="mx-auto max-w-6xl space-y-8 px-4 py-8 sm:px-6 lg:px-10 lg:py-10">
+      <PageHeader title={`Olá, ${user.name.split(" ")[0]}`} description="Converse com o assistente, abra um chamado ou acompanhe os que já estão em andamento." />
+      <div className="grid gap-8 lg:grid-cols-[1fr_22rem]">
       <div className="space-y-8">
       <ChatWidget
         conversationId={conversation?.id ?? null}
@@ -29,19 +33,24 @@ export default async function RequesterPage() {
         human={conversation ? chatHuman.bind(null, conversation.id) : undefined}
       />
       <section aria-labelledby="my-tickets">
-        <h1 id="my-tickets" className="mb-4 text-xl font-semibold">Meus chamados</h1>
+        <h2 id="my-tickets" className="section-title mb-3">Meus chamados</h2>
         {tickets.length === 0 ? (
-          <p className="text-slate-600 dark:text-slate-400">Você ainda não abriu chamados.</p>
+          <EmptyState icon={<Inbox className="size-5" />} title="Você ainda não abriu chamados">
+            Quando abrir, eles aparecem aqui com o status atualizado.
+          </EmptyState>
         ) : (
-          <ul className="divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white dark:divide-slate-800 dark:border-slate-800 dark:bg-slate-900">
+          <ul className="panel divide-y divide-slate-100 overflow-hidden dark:divide-slate-800">
             {tickets.map((t) => (
               <li key={t.id}>
-                <Link href={`/solicitante/chamados/${t.id}`} className="flex items-center justify-between gap-3 p-3 hover:bg-slate-50 dark:hover:bg-slate-800">
+                <Link href={`/solicitante/chamados/${t.id}`} className="group flex items-center justify-between gap-3 px-4 py-3.5 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/40">
                   <span>
                     <span className="block font-medium">{t.title}</span>
                     <span className="text-xs text-slate-500 dark:text-slate-400">Aberto em {formatDateTime(t.createdAt)}</span>
                   </span>
-                  <StatusBadge status={t.status} />
+                  <span className="flex items-center gap-2">
+                    <StatusBadge status={t.status} />
+                    <ChevronRight className="size-4 text-slate-300 transition-transform group-hover:translate-x-0.5 dark:text-slate-600" aria-hidden />
+                  </span>
                 </Link>
               </li>
             ))}
@@ -50,27 +59,28 @@ export default async function RequesterPage() {
       </section>
       </div>
 
-      <section aria-labelledby="new-ticket" className="h-fit rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-        <h2 id="new-ticket" className="mb-3 font-semibold">Abrir chamado</h2>
+      <section aria-labelledby="new-ticket" className="panel h-fit animate-rise p-5 lg:sticky lg:top-8">
+        <h2 id="new-ticket" className="section-title mb-4 flex items-center gap-2"><PlusCircle className="size-4 text-brand-500" aria-hidden /> Abrir chamado</h2>
         <ActionForm action={openTicket} className="space-y-3">
-          <label className="block space-y-1">
-            <span className="text-sm font-medium">Assunto</span>
+          <label className="block space-y-1.5">
+            <span className="field-label">Assunto</span>
             <input name="title" required minLength={3} maxLength={200} className="input" />
           </label>
-          <label className="block space-y-1">
-            <span className="text-sm font-medium">Categoria (opcional)</span>
+          <label className="block space-y-1.5">
+            <span className="field-label">Categoria (opcional)</span>
             <select name="category" className="input" defaultValue="">
               <option value="">Não sei</option>
               {team.categories.map((c) => <option key={c}>{c}</option>)}
             </select>
           </label>
-          <label className="block space-y-1">
-            <span className="text-sm font-medium">Descrição</span>
+          <label className="block space-y-1.5">
+            <span className="field-label">Descrição</span>
             <textarea name="description" required minLength={5} rows={5} className="input" placeholder="O que aconteceu? Desde quando? Alguma mensagem de erro?" />
           </label>
           <button className="btn-primary w-full">Abrir chamado</button>
         </ActionForm>
       </section>
+      </div>
     </main>
   );
 }

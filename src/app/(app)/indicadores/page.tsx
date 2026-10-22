@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { Info } from "lucide-react";
+import { PageHeader } from "@/components/ui/page-header";
 import { requireUser } from "@/lib/session";
 import { dashboard, TARGETS, type Metrics } from "@/lib/metrics";
 import { BarList, DailyColumns, StatTile } from "@/components/metrics/charts";
@@ -33,25 +35,34 @@ export default async function MetricsPage({ searchParams }: PageProps<"/indicado
   const base = data.baseline?.metrics;
 
   return (
-    <main className="mx-auto max-w-6xl space-y-6 p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold">Indicadores</h1>
-        <nav aria-label="Período" className="flex gap-1 rounded-md border border-slate-200 p-0.5 text-sm dark:border-slate-800">
-          {RANGES.map((d) => (
-            <Link key={d} href={`/indicadores?dias=${d}`} aria-current={d === days ? "page" : undefined} className={`rounded px-3 py-1 ${d === days ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900" : "hover:bg-slate-100 dark:hover:bg-slate-800"}`}>
-              {d} dias
-            </Link>
-          ))}
-        </nav>
-      </div>
+    <main className="mx-auto max-w-6xl space-y-6 px-4 py-8 sm:px-6 lg:px-10 lg:py-10">
+      <PageHeader
+        title="Indicadores"
+        description={`Desempenho da equipe e dos agentes nos últimos ${days} dias.`}
+        actions={
+          <nav aria-label="Período" className="flex gap-0.5 rounded-xl border border-slate-200/80 bg-slate-100/80 p-1 text-sm dark:border-slate-800 dark:bg-slate-900/60">
+            {RANGES.map((d) => (
+              <Link
+                key={d}
+                href={`/indicadores?dias=${d}`}
+                aria-current={d === days ? "page" : undefined}
+                className={`rounded-lg px-3.5 py-1.5 font-medium transition ${d === days ? "bg-white text-slate-900 shadow-card dark:bg-slate-800 dark:text-white" : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"}`}
+              >
+                {d} dias
+              </Link>
+            ))}
+          </nav>
+        }
+      />
 
       {data.baseline && !data.baseline.metrics && (
-        <p className="rounded-md bg-sky-50 p-3 text-sm text-sky-900 dark:bg-sky-950 dark:text-sky-100">
+        <p className="flex items-start gap-2.5 rounded-xl border border-brand-200/70 bg-brand-50/70 p-3.5 text-sm text-brand-900 dark:border-brand-900/60 dark:bg-brand-950/30 dark:text-brand-100">
+          <Info className="mt-0.5 size-4 shrink-0 text-brand-500" aria-hidden />
           A linha de base está sendo medida na primeira semana de uso (até {data.baseline.period.to.toLocaleDateString("pt-BR")}). As metas de redução usam esses valores.
         </p>
       )}
 
-      <section aria-label="Métricas de sucesso" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <section aria-label="Métricas de sucesso" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile label="Tempo médio de primeira resposta" value={duration(m.avgFirstResponseMin)} goal={reductionGoal(m.avgFirstResponseMin, base?.avgFirstResponseMin, TARGETS.firstResponseReduction)} />
         <StatTile label="Tempo médio de resolução" value={duration(m.avgResolutionMin)} detail="Chamados resolvidos por pessoas" goal={reductionGoal(m.avgResolutionMin, base?.avgResolutionMin, TARGETS.resolutionReduction)} />
         <StatTile

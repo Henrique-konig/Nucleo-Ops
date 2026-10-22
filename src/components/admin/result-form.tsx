@@ -38,7 +38,7 @@ export function ResultForm({
         {children}
       </ActionForm>
       {shown && (
-        <div role="status" className="space-y-1 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-800 dark:bg-amber-950">
+        <div role="status" className="animate-rise space-y-2 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm dark:border-amber-900/60 dark:bg-amber-950/40">
           <p className="font-medium">{title} — copie agora, não será mostrado de novo.</p>
           <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
             {Object.entries(shown).map(([k, v]) => (
@@ -48,7 +48,7 @@ export function ResultForm({
               </div>
             ))}
           </dl>
-          <button className="text-xs underline" onClick={() => setShown(null)}>Ocultar</button>
+          <button className="btn-ghost px-2 py-1 text-xs" onClick={() => setShown(null)}>Ocultar</button>
         </div>
       )}
     </div>

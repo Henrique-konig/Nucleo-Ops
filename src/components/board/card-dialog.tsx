@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import { Archive, CheckSquare, ExternalLink, GitPullRequest, Tag, Trash2, X } from "lucide-react";
 import type { BoardCard } from "@/lib/boards";
 import * as actions from "@/app/(app)/boards/[boardId]/actions";
 import type { BoardPermissions } from "./board-view";
@@ -57,36 +58,39 @@ export function CardDialog({ card, columns, members, labels, permissions, onClos
       aria-labelledby="card-dialog-title"
       onClose={onClose}
       onClick={(e) => e.target === dialogRef.current && onClose()}
-      className="m-auto w-full max-w-xl rounded-xl bg-white p-0 text-slate-900 shadow-2xl backdrop:bg-slate-950/50 dark:bg-slate-900 dark:text-slate-100"
+      className="m-auto w-[calc(100%-2rem)] max-w-2xl rounded-2xl border border-slate-200 bg-white p-0 text-slate-900 shadow-2xl dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
     >
-      <div className="max-h-[85vh] space-y-5 overflow-y-auto p-5">
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <h2 id="card-dialog-title" className="text-lg font-semibold">Cartão</h2>
-            {card.ticket && (
-              <a href={`/chamados/${card.ticket.id}`} className="text-sm text-sky-800 underline dark:text-sky-300">Abrir chamado e conversa</a>
-            )}
-          </div>
-          <button className="btn" onClick={onClose}>Fechar</button>
+      <div className="sticky top-0 z-10 flex items-start justify-between gap-2 border-b border-slate-100 bg-white/90 px-6 py-4 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">
+        <div>
+          <p className="eyebrow">{columns.find((c) => c.id === card.columnId)?.name ?? "Cartão"}</p>
+          <h2 id="card-dialog-title" className="mt-0.5 text-lg font-semibold tracking-tight">Detalhes do cartão</h2>
+          {card.ticket && (
+            <a href={`/chamados/${card.ticket.id}`} className="link mt-1 inline-flex items-center gap-1 text-sm">
+              Abrir chamado e conversa <ExternalLink className="size-3.5" aria-hidden />
+            </a>
+          )}
         </div>
+        <button className="icon-btn" onClick={onClose} aria-label="Fechar"><X className="size-5" aria-hidden /></button>
+      </div>
+      <div className="max-h-[75vh] space-y-6 overflow-y-auto px-6 py-5">
 
         <form action={save} className="space-y-4">
           <fieldset disabled={readOnly || pending} className="space-y-4">
             <label className="block space-y-1">
-              <span className="text-sm font-medium">Título</span>
+              <span className="field-label">Título</span>
               <input name="title" defaultValue={card.title} required maxLength={200} className="input" />
             </label>
             <label className="block space-y-1">
-              <span className="text-sm font-medium">Descrição</span>
+              <span className="field-label">Descrição</span>
               <textarea name="description" defaultValue={card.description ?? ""} rows={4} className="input" />
             </label>
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block space-y-1">
-                <span className="text-sm font-medium">Prazo</span>
+                <span className="field-label">Prazo</span>
                 <input name="dueDate" type="date" defaultValue={toDateInput(card.dueDate)} className="input" />
               </label>
               <label className="block space-y-1">
-                <span className="text-sm font-medium">Responsável</span>
+                <span className="field-label">Responsável</span>
                 <select name="assigneeId" defaultValue={card.assignee?.id ?? ""} disabled={!permissions.assign} className="input">
                   <option value="">Ninguém</option>
                   {members.map((m) => (
@@ -96,11 +100,11 @@ export function CardDialog({ card, columns, members, labels, permissions, onClos
               </label>
             </div>
             <fieldset className="space-y-1">
-              <legend className="text-sm font-medium">Etiquetas</legend>
+              <legend className="field-label mb-1.5 flex items-center gap-1.5"><Tag className="size-3.5" aria-hidden /> Etiquetas</legend>
               <div className="flex flex-wrap gap-2">
                 {labelOptions.length === 0 && <span className="text-sm text-slate-500">Nenhuma etiqueta criada.</span>}
                 {labelOptions.map((l) => (
-                  <label key={l.id} className={`flex items-center gap-1 rounded px-2 py-0.5 text-sm ${LABEL_COLORS[l.color] ?? LABEL_COLORS.slate}`}>
+                  <label key={l.id} className={`badge cursor-pointer gap-1.5 px-2 py-1 text-sm transition hover:brightness-95 ${LABEL_COLORS[l.color] ?? LABEL_COLORS.slate}`}>
                     <input type="checkbox" name="labelIds" value={l.id} defaultChecked={card.labels.some((cl) => cl.id === l.id)} />
                     {l.name}
                   </label>
@@ -117,10 +121,10 @@ export function CardDialog({ card, columns, members, labels, permissions, onClos
 
         <CodeLinks card={card} readOnly={readOnly} onResult={onResult} />
 
-        <div className="flex flex-wrap items-end justify-between gap-3 border-t border-slate-200 pt-4 dark:border-slate-800">
+        <div className="flex flex-wrap items-end justify-between gap-3 border-t border-slate-100 pt-5 dark:border-slate-800">
           {permissions.moveCard && (
             <label className="space-y-1">
-              <span className="block text-sm font-medium">Coluna</span>
+              <span className="field-label block">Mover para a coluna</span>
               <select className="input" value={card.columnId} onChange={(e) => onMove(e.target.value)}>
                 {columns.map((c) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
@@ -139,7 +143,7 @@ export function CardDialog({ card, columns, members, labels, permissions, onClos
                 });
               }}
             >
-              Arquivar
+              <Archive className="size-4" aria-hidden /> Arquivar
             </button>
           )}
         </div>
@@ -154,13 +158,20 @@ function Checklist({ card, readOnly, onResult }: { card: BoardCard; readOnly: bo
   const done = card.checklist.filter((i) => i.done).length;
 
   return (
-    <section aria-labelledby="checklist-title" className="space-y-2">
-      <h3 id="checklist-title" className="text-sm font-medium">
-        Checklist {card.checklist.length > 0 && <span className="font-normal text-slate-500">({done}/{card.checklist.length})</span>}
-      </h3>
+    <section aria-labelledby="checklist-title" className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <h3 id="checklist-title" className="field-label flex items-center gap-1.5">
+          <CheckSquare className="size-3.5" aria-hidden /> Checklist {card.checklist.length > 0 && <span className="font-normal text-slate-500">({done}/{card.checklist.length})</span>}
+        </h3>
+        {card.checklist.length > 0 && (
+          <div className="h-1.5 w-32 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800" aria-hidden>
+            <div className="h-full rounded-full bg-emerald-500 transition-all duration-500" style={{ width: `${(done / card.checklist.length) * 100}%` }} />
+          </div>
+        )}
+      </div>
       <ul className="space-y-1">
         {card.checklist.map((item) => (
-          <li key={item.id} className="flex items-center justify-between gap-2 text-sm">
+          <li key={item.id} className="group flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/60">
             <label className="flex items-center gap-2">
               <input
                 type="checkbox"
@@ -172,12 +183,13 @@ function Checklist({ card, readOnly, onResult }: { card: BoardCard; readOnly: bo
             </label>
             {!readOnly && (
               <button
-                className="text-xs text-slate-500 underline hover:text-red-700"
+                className="icon-btn size-7 opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100 hover:text-red-600"
                 aria-label={`Remover "${item.text}"`}
+                title="Remover"
                 disabled={pending}
                 onClick={() => startTransition(async () => { onResult(await actions.deleteChecklistItem({ itemId: item.id })); })}
               >
-                Remover
+                <Trash2 className="size-3.5" aria-hidden />
               </button>
             )}
           </li>
@@ -207,7 +219,7 @@ function NewLabelForm({ onCreated, onResult }: { onCreated: (l: LabelOption) => 
   const formRef = useRef<HTMLFormElement>(null);
   return (
     <details>
-      <summary className="cursor-pointer text-sm text-sky-800 underline dark:text-sky-300">Nova etiqueta</summary>
+      <summary className="link cursor-pointer text-sm">+ Nova etiqueta</summary>
       <form
         ref={formRef}
         className="mt-2 flex flex-wrap gap-2"
@@ -243,7 +255,7 @@ function CodeLinks({ card, readOnly, onResult }: { card: BoardCard; readOnly: bo
   const code = `PLT-${card.id.slice(-8)}`;
   return (
     <section aria-labelledby="links-title" className="space-y-2">
-      <h3 id="links-title" className="text-sm font-medium">Pull requests</h3>
+      <h3 id="links-title" className="field-label flex items-center gap-1.5"><GitPullRequest className="size-3.5" aria-hidden /> Pull requests</h3>
       <p className="text-xs text-slate-600 dark:text-slate-400">
         Cite <code className="rounded bg-slate-100 px-1 dark:bg-slate-800">{code}</code> no título, na descrição ou no branch do PR para vincular automaticamente.
       </p>
@@ -251,7 +263,7 @@ function CodeLinks({ card, readOnly, onResult }: { card: BoardCard; readOnly: bo
         <ul className="space-y-1 text-sm">
           {card.links.map((l) => (
             <li key={l.id} className="flex items-center justify-between gap-2">
-              <a href={l.url} target="_blank" rel="noreferrer" className="truncate underline">{l.title ?? l.url}</a>
+              <a href={l.url} target="_blank" rel="noreferrer" className="link truncate">{l.title ?? l.url}</a>
               <span className="flex shrink-0 items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
                 {l.state ? LINK_STATE[l.state] ?? l.state : ""}
                 {!readOnly && (
