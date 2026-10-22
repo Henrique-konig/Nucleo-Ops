@@ -1,10 +1,11 @@
 // Dados iniciais: uma equipe, um usuário por papel, o quadro de atendimento e os
-// agentes (desativados e em modo de simulação). Pode rodar mais de uma vez.
+// agentes, documentos de exemplo e e-mail em modo log. Pode rodar mais de uma vez.
 import "dotenv/config";
 import bcrypt from "bcryptjs";
 import { randomBytes } from "node:crypto";
 import { createPrismaClient } from "../src/lib/prisma-client";
-import type { AgentType, Role, TicketStatus } from "../src/generated/prisma/enums";
+import type { Role } from "../src/generated/prisma/enums";
+import { agentPermissions, DEFAULT_AGENTS, DEFAULT_COLUMNS, DEFAULT_LABELS } from "../src/lib/team-defaults";
 import { sealIntegrationConfig } from "../src/lib/integrations";
 
 const db = createPrismaClient();
@@ -17,27 +18,6 @@ const users: { name: string; email: string; role: Role }[] = [
   { name: "Tânia Técnica", email: "tecnico@plantao.local", role: "TECHNICIAN" },
   { name: "Sérgio Solicitante", email: "solicitante@plantao.local", role: "REQUESTER" },
   { name: "Aurora Auditora", email: "auditor@plantao.local", role: "AUDITOR" },
-];
-
-const columns: { name: string; ticketStatus: TicketStatus | null }[] = [
-  { name: "Entrada", ticketStatus: "OPEN" },
-  { name: "Em andamento", ticketStatus: "IN_PROGRESS" },
-  { name: "Em revisão", ticketStatus: null },
-  { name: "Concluído", ticketStatus: "RESOLVED" },
-];
-const labels = [
-  { name: "Acesso", color: "sky" },
-  { name: "Rede", color: "violet" },
-  { name: "Urgente", color: "red" },
-];
-// Triagem, pesquisa, resumo e chatbot começam ativos (sem chave de API usam o provedor local,
-// sem custo). Execução começa desligada e em simulação.
-const agents: { type: AgentType; active: boolean; dryRun: boolean }[] = [
-  { type: "TRIAGE", active: true, dryRun: false },
-  { type: "RESEARCH", active: true, dryRun: false },
-  { type: "EXECUTION", active: false, dryRun: true },
-  { type: "SUMMARY", active: true, dryRun: false },
-  { type: "CHATBOT", active: true, dryRun: false },
 ];
 
 const documents = [
@@ -72,23 +52,15 @@ async function main() {
     });
   }
 
-  for (const l of labels) {
+  for (const l of DEFAULT_LABELS) {
     await db.label.upsert({ where: { teamId_name: { teamId: team.id, name: l.name } }, update: {}, create: { ...l, teamId: team.id } });
   }
 
-  for (const agent of agents) {
+  for (const agent of DEFAULT_AGENTS) {
     await db.agent.upsert({
       where: { teamId_type: { teamId: team.id, type: agent.type } },
       update: {},
-      create: {
-        teamId: team.id,
-        ...agent,
-        permissions: {
-          allowedActions: agent.type === "EXECUTION" ? ["reset_password", "unlock_account", "add_to_group"] : [],
-          perMinute: 30,
-          perDay: 2000,
-        },
-      },
+      create: { teamId: team.id, ...agent, permissions: agentPermissions(agent.type) },
     });
   }
 
@@ -101,7 +73,7 @@ async function main() {
       data: {
         name: "Atendimento",
         teamId: team.id,
-        columns: { create: columns.map((c, i) => ({ ...c, position: (i + 1) * 1024 })) },
+        columns: { create: DEFAULT_COLUMNS.map((c, i) => ({ ...c, position: (i + 1) * 1024 })) },
       },
     });
   }

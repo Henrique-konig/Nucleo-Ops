@@ -19,7 +19,7 @@ const listeners = state.realtimeListeners;
 
 function connect(): Promise<Client> {
   state.realtimeClient ??= (async () => {
-    const client = new Client({ connectionString: process.env.DIRECT_URL ?? process.env.DATABASE_URL });
+    const client = new Client({ connectionString: process.env.DIRECT_URL ?? process.env.DATABASE_URL_UNPOOLED ?? process.env.DATABASE_URL });
     const reset = () => {
       state.realtimeClient = null;
       client.end().catch(() => {});

@@ -133,14 +133,33 @@ Postgres com Docker: `docker run -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=pl
 | Variável | Para quê |
 | --- | --- |
 | `DATABASE_URL` | Conexão da aplicação (no Neon, a URL com `-pooler`) |
-| `DIRECT_URL` | Conexão direta: migrações e o `LISTEN` do tempo real |
+| `DIRECT_URL` | Conexão direta: migrações e o `LISTEN` do tempo real (ou `DATABASE_URL_UNPOOLED`, da integração Neon) |
 | `AUTH_SECRET` | Assinatura das sessões (`openssl rand -base64 32`) |
 | `INTEGRATION_ENCRYPTION_KEY` | Chave AES-256 das configurações de integração (32 bytes em base64) |
 | `APP_URL` | Endereço público, usado nos links de acompanhamento |
 | `CRON_SECRET` | Protege `/api/cron/*` (a Vercel envia `Authorization: Bearer`) |
+| `SETUP_TOKEN` | Código exigido na primeira configuração (`/setup`) |
 | `ANTHROPIC_API_KEY`, `AI_MODEL`, `AI_PROVIDER` | Provedor de IA (sem chave: provedor local) |
 | `VOYAGE_API_KEY` | Embeddings para busca semântica (sem chave: texto completo) |
 | `USD_BRL` | Cotação para mostrar custos em reais (padrão 5,40) |
+
+### Deploy na Vercel
+
+1. Importe o repositório na Vercel (framework Next.js). O `vercel.json` já define
+   `npm run vercel-build`, que aplica as migrações antes do build quando há banco.
+2. Em **Storage → Neon**, crie o banco e conecte ao projeto. A integração define
+   `DATABASE_URL` (com pooling) e `DATABASE_URL_UNPOOLED`, que o Plantão usa para
+   migrações e tempo real. Habilite a extensão pgvector (a migração já roda
+   `CREATE EXTENSION IF NOT EXISTS vector`).
+3. Defina `AUTH_SECRET`, `INTEGRATION_ENCRYPTION_KEY`, `CRON_SECRET`, `SETUP_TOKEN`,
+   `APP_URL` e, se for usar o Claude, `ANTHROPIC_API_KEY`. Depois faça um novo deploy.
+4. Abra o site: sem equipe cadastrada, ele leva a `/setup`, onde você cria a equipe e o
+   primeiro administrador (o código pedido é o `SETUP_TOKEN`).
+
+No plano Hobby, a Vercel só aceita cron diário: a fila é processada logo após cada
+requisição e pela rotina diária. No plano Pro, adicione
+`{ "path": "/api/cron/jobs", "schedule": "* * * * *" }` em `vercel.json` para as
+retentativas rodarem a cada minuto.
 
 ### Neon e Vercel
 
@@ -148,9 +167,9 @@ Postgres com Docker: `docker run -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=pl
   não mantém `LISTEN`.
 - Com a integração Neon + Vercel, cada pull request ganha um branch do banco. Rode
   `prisma migrate deploy` no build de preview.
-- `vercel.json` agenda `/api/cron/jobs`, que processa a fila a cada minuto, e `/api/cron/daily`,
-  diariamente às 07:00 de Brasília. A rotina diária gera os resumos, aplica a retenção, encerra
-  conversas paradas e, às segundas, avisa sobre documentos vencendo.
+- `vercel.json` agenda `/api/cron/daily` às 07:00 de Brasília: processa a fila, gera os
+  resumos, aplica a retenção, encerra conversas paradas e, às segundas, avisa sobre
+  documentos vencendo.
 - A conexão SSE é encerrada no limite da função (300 s) e o navegador reconecta sozinho.
 
 ## Integrações
