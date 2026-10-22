@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
-    "vercel-build": "prisma generate && (test -z \"$DATABASE_URL\" || prisma migrate deploy) && next build",
+    "vercel-build": "prisma generate && (test -z \"$DATABASE_URL\" || (for i in 1 2 3; do prisma migrate resolve --rolled-back 20261022223000_boards_agents >/dev/null 2>&1 || break; done; prisma migrate deploy)) && next build",
     "start": "next start",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
