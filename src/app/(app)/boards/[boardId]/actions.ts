@@ -2,6 +2,7 @@
 
 import * as boards from "@/lib/boards";
 import { runAction, type ActionResult } from "@/lib/action-result";
+import { linkCard, unlinkCard } from "@/lib/code-links";
 
 export type { ActionResult };
 
@@ -49,4 +50,11 @@ export async function createLabel(input: unknown) {
     const label = await boards.createLabel(a, input as never);
     return { id: label.id, name: label.name, color: label.color };
   }, BOARD);
+}
+
+export async function linkCardAction(input: { cardId: string; url: string }) {
+  return runAction((a) => linkCard(a, input.cardId, input.url), BOARD);
+}
+export async function unlinkCardAction(linkId: string) {
+  return runAction((a) => unlinkCard(a, linkId), BOARD);
 }

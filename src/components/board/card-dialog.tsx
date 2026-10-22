@@ -115,6 +115,8 @@ export function CardDialog({ card, columns, members, labels, permissions, onClos
 
         <Checklist card={card} readOnly={readOnly} onResult={onResult} />
 
+        <CodeLinks card={card} readOnly={readOnly} onResult={onResult} />
+
         <div className="flex flex-wrap items-end justify-between gap-3 border-t border-slate-200 pt-4 dark:border-slate-800">
           {permissions.moveCard && (
             <label className="space-y-1">
@@ -230,5 +232,51 @@ function NewLabelForm({ onCreated, onResult }: { onCreated: (l: LabelOption) => 
         <button className="btn" disabled={pending}>Criar</button>
       </form>
     </details>
+  );
+}
+
+const LINK_STATE: Record<string, string> = { open: "aberto", closed: "fechado", merged: "integrado" };
+
+function CodeLinks({ card, readOnly, onResult }: { card: BoardCard; readOnly: boolean; onResult: Props["onResult"] }) {
+  const [pending, startTransition] = useTransition();
+  const formRef = useRef<HTMLFormElement>(null);
+  const code = `PLT-${card.id.slice(-8)}`;
+  return (
+    <section aria-labelledby="links-title" className="space-y-2">
+      <h3 id="links-title" className="text-sm font-medium">Pull requests</h3>
+      <p className="text-xs text-slate-600 dark:text-slate-400">
+        Cite <code className="rounded bg-slate-100 px-1 dark:bg-slate-800">{code}</code> no título, na descrição ou no branch do PR para vincular automaticamente.
+      </p>
+      {card.links.length > 0 && (
+        <ul className="space-y-1 text-sm">
+          {card.links.map((l) => (
+            <li key={l.id} className="flex items-center justify-between gap-2">
+              <a href={l.url} target="_blank" rel="noreferrer" className="truncate underline">{l.title ?? l.url}</a>
+              <span className="flex shrink-0 items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
+                {l.state ? LINK_STATE[l.state] ?? l.state : ""}
+                {!readOnly && (
+                  <button className="underline" disabled={pending} aria-label={`Remover vínculo ${l.url}`} onClick={() => startTransition(async () => { onResult(await actions.unlinkCardAction(l.id)); })}>
+                    Remover
+                  </button>
+                )}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {!readOnly && (
+        <form
+          ref={formRef}
+          className="flex gap-2"
+          action={(fd) => startTransition(async () => {
+            if (onResult(await actions.linkCardAction({ cardId: card.id, url: String(fd.get("url")) }))) formRef.current?.reset();
+          })}
+        >
+          <label className="sr-only" htmlFor="link-url">Link do pull request</label>
+          <input id="link-url" name="url" type="url" required placeholder="https://github.com/org/repo/pull/123" className="input py-1" />
+          <button className="btn" disabled={pending}>Vincular</button>
+        </form>
+      )}
+    </section>
   );
 }
