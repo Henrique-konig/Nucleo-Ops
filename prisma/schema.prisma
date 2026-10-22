@@ -1,0 +1,298 @@
+// Plantão — modelo de dados (PostgreSQL no Neon).
+// Regras que o Prisma não expressa ficam em SQL bruto nas migrações:
+//   - extensão pgvector e índice HNSW em Document.embedding
+//   - unicidade de chamado por canal (índice único parcial)
+//   - tabela Action append-only (trigger que bloqueia UPDATE/DELETE)
+//   - Action exige exatamente um autor (agente ou usuário)
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  REQUESTER // Solicitante
+  TECHNICIAN // Técnico
+  COORDINATOR // Coordenador
+  ADMIN // Administrador
+  AUDITOR // Auditor
+}
+
+enum Channel {
+  FORM
+  EMAIL
+  CHAT
+  WEBHOOK
+  SLACK
+  TEAMS
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING
+  RESOLVED
+  CLOSED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum AgentType {
+  TRIAGE
+  RESEARCH
+  EXECUTION
+  SUMMARY
+}
+
+enum IntegrationType {
+  EMAIL
+  SLACK
+  TEAMS
+  GITHUB
+  GITLAB
+  GOOGLE_CALENDAR
+  WEBHOOK
+}
+
+model Team {
+  id                   String   @id @default(cuid())
+  name                 String
+  timezone             String   @default("America/Sao_Paulo")
+  // Dias de retenção dos chamados encerrados; null = sem expurgo.
+  retentionDays        Int?
+  // Teto mensal de custo de IA em centavos; alerta ao atingir 80%.
+  aiMonthlyBudgetCents Int?
+  createdAt            DateTime @default(now())
+
+  users        User[]
+  boards       Board[]
+  tickets      Ticket[]
+  labels       Label[]
+  agents       Agent[]
+  documents    Document[]
+  integrations Integration[]
+  actions      Action[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String?
+  role         Role     @default(REQUESTER)
+  active       Boolean  @default(true)
+  teamId       String
+  createdAt    DateTime @default(now())
+
+  team             Team      @relation(fields: [teamId], references: [id])
+  assignedCards    Card[]    @relation("CardAssignee")
+  requestedTickets Ticket[]  @relation("TicketRequester")
+  messages         Message[]
+  actions          Action[]  @relation("ActionUser")
+  confirmedActions Action[]  @relation("ActionConfirmer")
+
+  @@index([teamId])
+}
+
+model Board {
+  id        String   @id @default(cuid())
+  name      String
+  teamId    String
+  createdAt DateTime @default(now())
+
+  team    Team     @relation(fields: [teamId], references: [id])
+  columns Column[]
+  cards   Card[]
+
+  @@index([teamId])
+}
+
+model Column {
+  id       String @id @default(cuid())
+  name     String
+  // Ordem fracionária: inserir entre dois itens não exige reordenar os demais.
+  position Float
+  boardId  String
+
+  board Board  @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  cards Card[]
+
+  @@index([boardId, position])
+}
+
+model Card {
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  position    Float
+  dueDate     DateTime?
+  boardId     String
+  columnId    String
+  assigneeId  String?
+  ticketId    String?   @unique
+  // Cartões são arquivados, nunca apagados, para manter o histórico auditável.
+  archivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  board     Board           @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  column    Column          @relation(fields: [columnId], references: [id])
+  assignee  User?           @relation("CardAssignee", fields: [assigneeId], references: [id])
+  ticket    Ticket?         @relation(fields: [ticketId], references: [id])
+  labels    Label[]
+  checklist ChecklistItem[]
+
+  @@index([columnId, position])
+  @@index([boardId])
+}
+
+model Label {
+  id     String @id @default(cuid())
+  name   String
+  color  String @default("slate")
+  teamId String
+
+  team  Team   @relation(fields: [teamId], references: [id])
+  cards Card[]
+
+  @@unique([teamId, name])
+}
+
+model ChecklistItem {
+  id       String  @id @default(cuid())
+  text     String
+  done     Boolean @default(false)
+  position Float
+  cardId   String
+
+  card Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@index([cardId, position])
+}
+
+model Ticket {
+  id              String       @id @default(cuid())
+  teamId          String
+  channel         Channel
+  // Identificador no canal de origem (Message-ID do e-mail, id do webhook...).
+  // Único por equipe e canal — índice parcial em SQL bruto na migração.
+  externalId      String?
+  title           String
+  description     String
+  category        String?
+  priority        Priority     @default(MEDIUM)
+  status          TicketStatus @default(OPEN)
+  requesterId     String?
+  requesterEmail  String?
+  firstResponseAt DateTime?
+  resolvedAt      DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  team      Team      @relation(fields: [teamId], references: [id])
+  requester User?     @relation("TicketRequester", fields: [requesterId], references: [id])
+  card      Card?
+  messages  Message[]
+
+  @@index([teamId, status])
+  @@index([teamId, createdAt])
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  ticketId  String
+  authorId  String?
+  agentId   String?
+  content   String
+  channel   Channel
+  createdAt DateTime @default(now())
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author User?  @relation(fields: [authorId], references: [id])
+  agent  Agent? @relation(fields: [agentId], references: [id])
+
+  @@index([ticketId, createdAt])
+}
+
+model Agent {
+  id          String    @id @default(cuid())
+  teamId      String
+  type        AgentType
+  // Lista de ações permitidas e limites (por minuto/dia), mantida pelo administrador.
+  permissions Json      @default("{}")
+  active      Boolean   @default(false)
+  // Modo de simulação: registra o que faria, sem executar.
+  dryRun      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+
+  team     Team      @relation(fields: [teamId], references: [id])
+  actions  Action[]
+  messages Message[]
+
+  @@unique([teamId, type])
+}
+
+// Log de auditoria append-only. O alvo é guardado como (targetType, targetId)
+// sem chave estrangeira, para que o histórico sobreviva ao alvo.
+model Action {
+  id            String   @id @default(cuid())
+  teamId        String
+  agentId       String?
+  userId        String?
+  type          String
+  targetType    String
+  targetId      String
+  payload       Json?
+  result        Json?
+  confirmedById String?
+  createdAt     DateTime @default(now())
+
+  team        Team   @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  agent       Agent? @relation(fields: [agentId], references: [id], onDelete: Restrict)
+  user        User?  @relation("ActionUser", fields: [userId], references: [id], onDelete: Restrict)
+  confirmedBy User?  @relation("ActionConfirmer", fields: [confirmedById], references: [id], onDelete: Restrict)
+
+  @@index([teamId, createdAt])
+  @@index([targetType, targetId])
+}
+
+model Document {
+  id         String                       @id @default(cuid())
+  teamId     String
+  title      String
+  content    String
+  source     String?
+  // Embeddings de 1024 dimensões; busca por similaridade via $queryRaw.
+  embedding  Unsupported("vector(1024)")?
+  // Data de validade para revisão periódica da base de conhecimento.
+  validUntil DateTime?
+  createdAt  DateTime                     @default(now())
+  updatedAt  DateTime                     @updatedAt
+
+  team Team @relation(fields: [teamId], references: [id])
+
+  @@index([teamId])
+}
+
+model Integration {
+  id              String          @id @default(cuid())
+  teamId          String
+  type            IntegrationType
+  // Configuração cifrada com AES-256-GCM antes de gravar (ver src/lib/crypto.ts).
+  configEncrypted String
+  active          Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+
+  team Team @relation(fields: [teamId], references: [id])
+
+  @@index([teamId, type])
+}
