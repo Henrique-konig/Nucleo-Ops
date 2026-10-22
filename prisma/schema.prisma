@@ -126,6 +126,7 @@ model Team {
   executions   ExecutionRequest[]
   automations  AutomationRule[]
   reports      Report[]
+  customAgents CustomAgent[]
 }
 
 model User {
@@ -150,19 +151,27 @@ model User {
   reviewedDrafts     ReplyDraft[]
   proposedExecutions ExecutionRequest[] @relation("ExecutionProposer")
   decidedExecutions  ExecutionRequest[] @relation("ExecutionDecider")
+  savedFilters       SavedFilter[]
+  agentRuns          CustomAgentRun[]
 
   @@index([teamId])
 }
 
 model Board {
-  id        String   @id @default(cuid())
-  name      String
-  teamId    String
-  createdAt DateTime @default(now())
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  // Cor de destaque na lista de quadros (brand, sky, emerald, amber, rose, violet, slate).
+  color       String   @default("brand")
+  // Quadro que recebe os cartões dos chamados novos. Sem nenhum marcado, vale o mais antigo.
+  intake      Boolean  @default(false)
+  teamId      String
+  createdAt   DateTime @default(now())
 
-  team    Team     @relation(fields: [teamId], references: [id])
-  columns Column[]
-  cards   Card[]
+  team         Team          @relation(fields: [teamId], references: [id])
+  columns      Column[]
+  cards        Card[]
+  savedFilters SavedFilter[]
 
   @@index([teamId])
 }
@@ -194,21 +203,26 @@ model Card {
   columnId    String
   assigneeId  String?
   ticketId    String?   @unique
+  // Agente personalizado atribuído ao cartão.
+  agentId     String?
   // Cartões são arquivados, nunca apagados, para manter o histórico auditável.
   archivedAt  DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  board     Board           @relation(fields: [boardId], references: [id], onDelete: Cascade)
-  column    Column          @relation(fields: [columnId], references: [id])
-  assignee  User?           @relation("CardAssignee", fields: [assigneeId], references: [id])
-  ticket    Ticket?         @relation(fields: [ticketId], references: [id])
+  board     Board            @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  column    Column           @relation(fields: [columnId], references: [id])
+  assignee  User?            @relation("CardAssignee", fields: [assigneeId], references: [id])
+  agent     CustomAgent?     @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  ticket    Ticket?          @relation(fields: [ticketId], references: [id])
   labels    Label[]
   checklist ChecklistItem[]
   links     CardLink[]
+  agentRuns CustomAgentRun[]
 
   @@index([columnId, position])
   @@index([boardId])
+  @@index([agentId])
 }
 
 model Label {
@@ -523,4 +537,75 @@ model CardLink {
 
   @@unique([cardId, url])
   @@index([url])
+}
+
+// Filtro do quadro salvo com um nome. Pessoal, ou compartilhado com a equipe.
+model SavedFilter {
+  id        String   @id @default(cuid())
+  boardId   String
+  userId    String
+  name      String
+  // { text?, assigneeId?, labelId?, priority?, agentId?, due? }
+  filters   Json     @default("{}")
+  shared    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  board Board @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([boardId, userId])
+}
+
+enum AgentRunStatus {
+  QUEUED
+  RUNNING
+  DONE
+  FAILED
+}
+
+// Agente criado pela equipe: nome, função e instruções próprias. Atribuído a um
+// cartão, lê o cartão (e o chamado, se houver) e escreve uma análise. Não altera
+// nada sozinho: a pessoa decide o que fazer com o resultado.
+model CustomAgent {
+  id           String   @id @default(cuid())
+  teamId       String
+  name         String
+  role         String
+  instructions String
+  color        String   @default("violet")
+  // Roda assim que é atribuído a um cartão; sem isso, só sob demanda.
+  runOnAssign  Boolean  @default(true)
+  // Consulta a base de conhecimento antes de responder.
+  useKnowledge Boolean  @default(true)
+  active       Boolean  @default(true)
+  createdById  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  team  Team             @relation(fields: [teamId], references: [id])
+  cards Card[]
+  runs  CustomAgentRun[]
+
+  @@unique([teamId, name])
+}
+
+model CustomAgentRun {
+  id            String         @id @default(cuid())
+  agentId       String
+  cardId        String
+  status        AgentRunStatus @default(QUEUED)
+  // Pedido extra de quem disparou ("foque no impacto", "escreva o passo a passo"...).
+  prompt        String?
+  output        String?
+  error         String?
+  requestedById String
+  createdAt     DateTime       @default(now())
+  finishedAt    DateTime?
+
+  agent       CustomAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  card        Card        @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  requestedBy User        @relation(fields: [requestedById], references: [id])
+
+  @@index([cardId, createdAt])
+  @@index([agentId, createdAt])
 }

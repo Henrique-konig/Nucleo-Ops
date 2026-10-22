@@ -18,6 +18,10 @@ export const PERMISSIONS = {
   "execution:view": ["TECHNICIAN", "COORDINATOR", "ADMIN", "AUDITOR"],
   "team:manage": ["ADMIN"],
   "column:manage": ["COORDINATOR", "ADMIN"],
+  // Criar, renomear e excluir quadros.
+  "board:manage": ["COORDINATOR", "ADMIN"],
+  // Agentes personalizados (nome, função, instruções). Os agentes de sistema ficam em "agent:manage".
+  "agent:create": ["COORDINATOR", "ADMIN"],
   "automation:configure": ["COORDINATOR", "ADMIN"],
   "user:manage": ["ADMIN"],
   "integration:manage": ["ADMIN"],

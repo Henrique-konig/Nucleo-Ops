@@ -3,6 +3,7 @@
 import * as boards from "@/lib/boards";
 import { runAction, type ActionResult } from "@/lib/action-result";
 import { linkCard, unlinkCard } from "@/lib/code-links";
+import { listCardRuns, requestAgentRun } from "@/lib/custom-agents";
 
 export type { ActionResult };
 
@@ -57,4 +58,23 @@ export async function linkCardAction(input: { cardId: string; url: string }) {
 }
 export async function unlinkCardAction(linkId: string) {
   return runAction((a) => unlinkCard(a, linkId), BOARD);
+}
+
+export async function moveCardToBoard(input: unknown) {
+  return runAction(async (a) => { await boards.moveCardToBoard(a, input as never); }, ["/boards/[boardId]"]);
+}
+
+export async function saveFilter(input: unknown) {
+  return runAction((a) => boards.saveFilter(a, input as never), BOARD);
+}
+export async function deleteFilter(input: unknown) {
+  return runAction((a) => boards.deleteFilter(a, input as never), BOARD);
+}
+
+export async function runAgent(input: unknown) {
+  return runAction((a) => requestAgentRun(a, input as never), BOARD);
+}
+// Leitura sob demanda do histórico do agente no cartão aberto.
+export async function cardAgentRuns(cardId: string) {
+  return runAction((a) => listCardRuns(a, cardId));
 }

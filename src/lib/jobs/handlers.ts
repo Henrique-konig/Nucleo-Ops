@@ -8,6 +8,7 @@ import { researchJob } from "@/lib/agents/research";
 import { embedDocumentJob } from "@/lib/knowledge";
 import { proposeExecutionJob, runExecutionJob } from "@/lib/execution/service";
 import { summaryJob } from "@/lib/agents/summary";
+import { customAgentJob } from "@/lib/custom-agents";
 
 // Todas as tarefas que a fila sabe executar.
 export const jobHandlers: Record<string, JobHandler> = {
@@ -23,4 +24,5 @@ export const jobHandlers: Record<string, JobHandler> = {
   "agent.execution": proposeExecutionJob,
   "execution.run": runExecutionJob,
   "agent.summary": summaryJob,
+  "agent.custom": customAgentJob,
 };

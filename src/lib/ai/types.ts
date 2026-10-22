@@ -77,6 +77,37 @@ export const executionOutputSchema = z.object({
 });
 export type ExecutionOutput = z.infer<typeof executionOutputSchema>;
 
+export type AgentRunInput = {
+  agent: { name: string; role: string; instructions: string };
+  // Pedido extra de quem disparou a execução.
+  request: string | null;
+  card: {
+    title: string;
+    description: string | null;
+    board: string;
+    column: string;
+    dueDate: string | null;
+    assignee: string | null;
+    labels: string[];
+    checklist: { text: string; done: boolean }[];
+  };
+  ticket: {
+    title: string;
+    description: string;
+    status: string;
+    priority: string;
+    category: string | null;
+    conversation: { from: "solicitante" | "equipe"; content: string; internal: boolean }[];
+  } | null;
+  sources: Source[];
+};
+
+export const agentRunOutputSchema = z.object({
+  output: z.string().describe("Resultado do trabalho do agente, em português, em markdown simples"),
+  usedSourceIds: z.array(z.string()).describe("ids das fontes usadas"),
+});
+export type AgentRunOutput = z.infer<typeof agentRunOutputSchema>;
+
 export interface AiProvider {
   readonly name: string;
   triage(input: TriageInput): Promise<AiResult<TriageOutput>>;
@@ -84,6 +115,7 @@ export interface AiProvider {
   chat(input: ChatInput): Promise<AiResult<ChatOutput>>;
   summarize(input: SummaryInput): Promise<AiResult<{ summary: string }>>;
   proposeExecution(input: ExecutionInput): Promise<AiResult<ExecutionOutput>>;
+  runAgent(input: AgentRunInput): Promise<AiResult<AgentRunOutput>>;
 }
 
 export class AiRefusalError extends Error {}
