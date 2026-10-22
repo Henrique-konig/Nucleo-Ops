@@ -4,6 +4,7 @@
 //   - unicidade de chamado por canal (índice único parcial)
 //   - tabela Action append-only (trigger que bloqueia UPDATE/DELETE)
 //   - Action exige exatamente um autor (agente ou usuário)
+//   - índice GIN de texto completo (português) em Document, para busca sem embeddings
 
 generator client {
   provider = "prisma-client"
@@ -53,6 +54,39 @@ enum AgentType {
   SUMMARY
 }
 
+enum DraftStatus {
+  PENDING
+  SENT
+  DISCARDED
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  DONE
+  FAILED
+}
+
+enum ExecutionStatus {
+  PROPOSED // aguardando confirmação humana
+  APPROVED // confirmada, executando
+  REJECTED
+  EXECUTED
+  SIMULATED // executada em modo de simulação
+  FAILED
+}
+
+enum AutomationAction {
+  NOTIFY_CHANNEL // avisa o canal da equipe (Slack/Teams)
+  ASSIGN // atribui responsável
+  NOTIFY_REQUESTER // envia mensagem ao solicitante
+}
+
+enum ReportPeriod {
+  DAILY
+  WEEKLY
+}
+
 enum IntegrationType {
   EMAIL
   SLACK
@@ -71,6 +105,10 @@ model Team {
   retentionDays        Int?
   // Teto mensal de custo de IA em centavos; alerta ao atingir 80%.
   aiMonthlyBudgetCents Int?
+  // Categorias usadas pela triagem e pelos indicadores.
+  categories           String[] @default(["Acesso", "Senha", "Rede", "Hardware", "Software", "E-mail", "Outros"])
+  // Mês (AAAA-MM) em que o alerta de 80% do teto de IA já foi enviado.
+  aiBudgetAlertMonth   String?
   createdAt            DateTime @default(now())
 
   users        User[]
@@ -81,6 +119,11 @@ model Team {
   documents    Document[]
   integrations Integration[]
   actions      Action[]
+  jobs         Job[]
+  aiUsage      AiUsage[]
+  executions   ExecutionRequest[]
+  automations  AutomationRule[]
+  reports      Report[]
 }
 
 model User {
@@ -91,14 +134,20 @@ model User {
   role         Role     @default(REQUESTER)
   active       Boolean  @default(true)
   teamId       String
+  // Id do usuário no Slack, para comandos e menções.
+  slackUserId  String?  @unique
   createdAt    DateTime @default(now())
 
-  team             Team      @relation(fields: [teamId], references: [id])
-  assignedCards    Card[]    @relation("CardAssignee")
-  requestedTickets Ticket[]  @relation("TicketRequester")
-  messages         Message[]
-  actions          Action[]  @relation("ActionUser")
-  confirmedActions Action[]  @relation("ActionConfirmer")
+  team               Team               @relation(fields: [teamId], references: [id])
+  assignedCards      Card[]             @relation("CardAssignee")
+  requestedTickets   Ticket[]           @relation("TicketRequester")
+  messages           Message[]
+  actions            Action[]           @relation("ActionUser")
+  confirmedActions   Action[]           @relation("ActionConfirmer")
+  suggestedTickets   Ticket[]           @relation("TicketSuggestedAssignee")
+  reviewedDrafts     ReplyDraft[]
+  proposedExecutions ExecutionRequest[] @relation("ExecutionProposer")
+  decidedExecutions  ExecutionRequest[] @relation("ExecutionDecider")
 
   @@index([teamId])
 }
@@ -123,8 +172,12 @@ model Column {
   position Float
   boardId  String
 
-  board Board  @relation(fields: [boardId], references: [id], onDelete: Cascade)
-  cards Card[]
+  // Status do chamado quando o cartão entra nesta coluna (null = não muda).
+  ticketStatus TicketStatus?
+
+  board       Board            @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  cards       Card[]
+  automations AutomationRule[]
 
   @@index([boardId, position])
 }
@@ -150,6 +203,7 @@ model Card {
   ticket    Ticket?         @relation(fields: [ticketId], references: [id])
   labels    Label[]
   checklist ChecklistItem[]
+  links     CardLink[]
 
   @@index([columnId, position])
   @@index([boardId])
@@ -180,41 +234,64 @@ model ChecklistItem {
 }
 
 model Ticket {
-  id              String       @id @default(cuid())
-  teamId          String
-  channel         Channel
+  id                  String       @id @default(cuid())
+  teamId              String
+  channel             Channel
   // Identificador no canal de origem (Message-ID do e-mail, id do webhook...).
   // Único por equipe e canal — índice parcial em SQL bruto na migração.
-  externalId      String?
-  title           String
-  description     String
-  category        String?
-  priority        Priority     @default(MEDIUM)
-  status          TicketStatus @default(OPEN)
-  requesterId     String?
-  requesterEmail  String?
-  firstResponseAt DateTime?
-  resolvedAt      DateTime?
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  externalId          String?
+  title               String
+  description         String
+  category            String?
+  priority            Priority     @default(MEDIUM)
+  status              TicketStatus @default(OPEN)
+  requesterId         String?
+  requesterEmail      String?
+  requesterName       String?
+  // Token do link de acompanhamento para quem abriu sem conta (e-mail, webhook).
+  accessToken         String       @unique @default(cuid())
+  // Triagem: o agente aplica categoria e prioridade e guarda os valores
+  // anteriores no log, para que a sugestão possa ser desfeita.
+  suggestedAssigneeId String?
+  triagedAt           DateTime?
+  triagedByAgent      Boolean      @default(false)
+  // Conversa do chatbot que passou para um humano.
+  handoffAt           DateTime?
+  resolvedByAgent     Boolean      @default(false)
+  // Satisfação do solicitante, de 1 a 5.
+  satisfaction        Int?
+  firstResponseAt     DateTime?
+  resolvedAt          DateTime?
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
 
-  team      Team      @relation(fields: [teamId], references: [id])
-  requester User?     @relation("TicketRequester", fields: [requesterId], references: [id])
-  card      Card?
-  messages  Message[]
+  team              Team               @relation(fields: [teamId], references: [id])
+  requester         User?              @relation("TicketRequester", fields: [requesterId], references: [id])
+  suggestedAssignee User?              @relation("TicketSuggestedAssignee", fields: [suggestedAssigneeId], references: [id])
+  card              Card?
+  messages          Message[]
+  drafts            ReplyDraft[]
+  executions        ExecutionRequest[]
+  aiUsage           AiUsage[]
 
   @@index([teamId, status])
   @@index([teamId, createdAt])
 }
 
 model Message {
-  id        String   @id @default(cuid())
-  ticketId  String
-  authorId  String?
-  agentId   String?
-  content   String
-  channel   Channel
-  createdAt DateTime @default(now())
+  id          String   @id @default(cuid())
+  ticketId    String
+  authorId    String?
+  agentId     String?
+  // Autor externo (e-mail, webhook) sem conta no Plantão.
+  authorEmail String?
+  content     String
+  channel     Channel
+  // Nota interna: visível só para a equipe.
+  internal    Boolean  @default(false)
+  // Message-ID do e-mail, para encadear respostas.
+  externalId  String?
+  createdAt   DateTime @default(now())
 
   ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   author User?  @relation(fields: [authorId], references: [id])
@@ -224,19 +301,25 @@ model Message {
 }
 
 model Agent {
-  id          String    @id @default(cuid())
-  teamId      String
-  type        AgentType
+  id                  String    @id @default(cuid())
+  teamId              String
+  type                AgentType
   // Lista de ações permitidas e limites (por minuto/dia), mantida pelo administrador.
-  permissions Json      @default("{}")
-  active      Boolean   @default(false)
+  permissions         Json      @default("{}")
+  active              Boolean   @default(false)
   // Modo de simulação: registra o que faria, sem executar.
-  dryRun      Boolean   @default(true)
-  createdAt   DateTime  @default(now())
+  dryRun              Boolean   @default(true)
+  // Interrupção automática após falhas seguidas.
+  consecutiveFailures Int       @default(0)
+  pausedReason        String?
+  createdAt           DateTime  @default(now())
 
-  team     Team      @relation(fields: [teamId], references: [id])
-  actions  Action[]
-  messages Message[]
+  team       Team               @relation(fields: [teamId], references: [id])
+  actions    Action[]
+  messages   Message[]
+  drafts     ReplyDraft[]
+  executions ExecutionRequest[]
+  aiUsage    AiUsage[]
 
   @@unique([teamId, type])
 }
@@ -288,6 +371,7 @@ model Integration {
   teamId          String
   type            IntegrationType
   // Configuração cifrada com AES-256-GCM antes de gravar (ver src/lib/crypto.ts).
+  name            String          @default("")
   configEncrypted String
   active          Boolean         @default(true)
   createdAt       DateTime        @default(now())
@@ -295,4 +379,146 @@ model Integration {
   team Team @relation(fields: [teamId], references: [id])
 
   @@index([teamId, type])
+}
+
+// Resposta proposta pelo agente de pesquisa; só chega ao solicitante depois
+// que um técnico revisa e envia.
+model ReplyDraft {
+  id           String      @id @default(cuid())
+  ticketId     String
+  agentId      String?
+  content      String
+  // Documentos e chamados usados como fonte: [{ type, id, title }]
+  sources      Json        @default("[]")
+  status       DraftStatus @default(PENDING)
+  reviewedById String?
+  reviewedAt   DateTime?
+  createdAt    DateTime    @default(now())
+
+  ticket     Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  agent      Agent? @relation(fields: [agentId], references: [id])
+  reviewedBy User?  @relation(fields: [reviewedById], references: [id])
+
+  @@index([ticketId, status])
+}
+
+// Fila de tarefas em segundo plano (agentes, notificações), com retentativa.
+// Processada com SELECT ... FOR UPDATE SKIP LOCKED.
+model Job {
+  id          String    @id @default(cuid())
+  teamId      String
+  type        String
+  payload     Json      @default("{}")
+  status      JobStatus @default(QUEUED)
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(5)
+  runAt       DateTime  @default(now())
+  lockedAt    DateTime?
+  lastError   String?
+  // Evita enfileirar a mesma tarefa duas vezes.
+  dedupeKey   String?   @unique
+  createdAt   DateTime  @default(now())
+  finishedAt  DateTime?
+
+  team Team @relation(fields: [teamId], references: [id])
+
+  @@index([status, runAt])
+  @@index([teamId, createdAt])
+}
+
+// Consumo de IA por chamada ao modelo, para custo por chamado e teto mensal.
+model AiUsage {
+  id           String   @id @default(cuid())
+  teamId       String
+  agentId      String?
+  ticketId     String?
+  purpose      String
+  model        String
+  inputTokens  Int
+  outputTokens Int
+  // Custo em milionésimos de dólar.
+  costMicroUsd Int
+  createdAt    DateTime @default(now())
+
+  team   Team    @relation(fields: [teamId], references: [id])
+  agent  Agent?  @relation(fields: [agentId], references: [id])
+  ticket Ticket? @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+
+  @@index([teamId, createdAt])
+  @@index([ticketId])
+}
+
+// Ação pré-aprovada proposta para execução. Toda execução exige confirmação humana.
+model ExecutionRequest {
+  id                String          @id @default(cuid())
+  teamId            String
+  ticketId          String?
+  actionKey         String
+  params            Json            @default("{}")
+  reason            String?
+  status            ExecutionStatus @default(PROPOSED)
+  dryRun            Boolean         @default(true)
+  proposedByAgentId String?
+  proposedById      String?
+  decidedById       String?
+  decidedAt         DateTime?
+  executedAt        DateTime?
+  result            Json?
+  createdAt         DateTime        @default(now())
+
+  team            Team    @relation(fields: [teamId], references: [id])
+  ticket          Ticket? @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+  proposedByAgent Agent?  @relation(fields: [proposedByAgentId], references: [id])
+  proposedBy      User?   @relation("ExecutionProposer", fields: [proposedById], references: [id])
+  decidedBy       User?   @relation("ExecutionDecider", fields: [decidedById], references: [id])
+
+  @@index([teamId, status])
+}
+
+// Automação do quadro: quando um cartão entra na coluna, executa a ação.
+model AutomationRule {
+  id        String           @id @default(cuid())
+  teamId    String
+  columnId  String
+  action    AutomationAction
+  // NOTIFY_CHANNEL: { message? } · ASSIGN: { userId } · NOTIFY_REQUESTER: { message }
+  config    Json             @default("{}")
+  active    Boolean          @default(true)
+  createdAt DateTime         @default(now())
+
+  team   Team   @relation(fields: [teamId], references: [id])
+  column Column @relation(fields: [columnId], references: [id], onDelete: Cascade)
+
+  @@index([columnId])
+}
+
+model Report {
+  id          String       @id @default(cuid())
+  teamId      String
+  period      ReportPeriod
+  periodStart DateTime
+  periodEnd   DateTime
+  content     String
+  stats       Json         @default("{}")
+  createdAt   DateTime     @default(now())
+
+  team Team @relation(fields: [teamId], references: [id])
+
+  @@unique([teamId, period, periodStart])
+}
+
+// Pull/merge request vinculado a um cartão (GitHub ou GitLab).
+model CardLink {
+  id        String   @id @default(cuid())
+  cardId    String
+  provider  String
+  url       String
+  title     String?
+  state     String?
+  updatedAt DateTime @updatedAt
+
+  card Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@unique([cardId, url])
+  @@index([url])
 }
