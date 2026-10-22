@@ -6,6 +6,7 @@ import { assertCan } from "@/lib/permissions";
 import { enqueue, PermanentJobError, type JobHandler } from "@/lib/jobs/queue";
 import { NotFoundError, type Actor } from "@/lib/errors";
 import { getSystemUser } from "@/lib/tickets";
+import { notifyAssigned } from "@/lib/inbox";
 import type { Prisma } from "@/generated/prisma/client";
 
 // Automações do quadro (RF-11): "quando o cartão entrar na coluna X, faça Y".
@@ -49,6 +50,7 @@ export const runAutomationJob: JobHandler = async (job) => {
         if (!member) throw new PermanentJobError("Responsável da automação não existe mais");
         if (card.assigneeId === member.id) return;
         await tx.card.update({ where: { id: card.id }, data: { assigneeId: member.id } });
+        await notifyAssigned(tx, card, member.id, rule.teamId, null);
         break;
       }
       case "NOTIFY_REQUESTER": {

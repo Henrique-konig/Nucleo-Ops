@@ -4,6 +4,7 @@ import * as boards from "@/lib/boards";
 import { runAction, type ActionResult } from "@/lib/action-result";
 import { linkCard, unlinkCard } from "@/lib/code-links";
 import { listCardRuns, requestAgentRun } from "@/lib/custom-agents";
+import * as collaboration from "@/lib/collaboration";
 
 export type { ActionResult };
 
@@ -77,4 +78,26 @@ export async function runAgent(input: unknown) {
 // Leitura sob demanda do histórico do agente no cartão aberto.
 export async function cardAgentRuns(cardId: string) {
   return runAction((a) => listCardRuns(a, cardId));
+}
+
+// Colaboração: comentários, anexos e detalhes do cartão (carregados ao abrir o diálogo).
+export async function getCardDetailsAction(cardId: string) {
+  return runAction((a) => collaboration.getCardDetails(a, cardId));
+}
+export async function addCommentAction(input: unknown) {
+  return runAction(async (a) => { await collaboration.addComment(a, input as never); }, BOARD);
+}
+export async function editCommentAction(input: unknown) {
+  return runAction(async (a) => { await collaboration.editComment(a, input as never); });
+}
+export async function deleteCommentAction(input: unknown) {
+  return runAction((a) => collaboration.deleteComment(a, input as never), BOARD);
+}
+export async function uploadAttachmentAction(formData: FormData) {
+  return runAction(async (a) => {
+    await collaboration.addAttachment(a, String(formData.get("cardId") ?? ""), formData.get("file") as File);
+  }, BOARD);
+}
+export async function deleteAttachmentAction(input: unknown) {
+  return runAction((a) => collaboration.deleteAttachment(a, input as never), BOARD);
 }

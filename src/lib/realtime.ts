@@ -2,13 +2,15 @@ import "server-only";
 import { Client } from "pg";
 
 // Tempo real sem serviço externo: triggers no banco fazem pg_notify('plantao_board', boardId)
-// a cada mudança em cartões, colunas e checklists, e cada instância do servidor mantém
+// a cada mudança em cartões, colunas, checklists, comentários e anexos, e
+// pg_notify('plantao_user', userId) a cada notificação. Cada instância do servidor mantém
 // uma única conexão LISTEN que repassa os avisos aos navegadores conectados por SSE.
 // LISTEN exige conexão direta — no Neon, DIRECT_URL (sem -pooler).
 
-type Listener = (boardId: string) => void;
+const CHANNELS = ["plantao_board", "plantao_user"] as const;
+type ChannelName = (typeof CHANNELS)[number];
 
-const CHANNEL = "plantao_board";
+type Listener = { channel: ChannelName; id: string; onChange: () => void };
 
 const state = globalThis as unknown as {
   realtimeListeners?: Set<Listener>;
@@ -25,14 +27,16 @@ function connect(): Promise<Client> {
       client.end().catch(() => {});
     };
     client.on("notification", (msg) => {
-      if (msg.channel !== CHANNEL || !msg.payload) return;
-      for (const listener of listeners) listener(msg.payload);
+      if (!msg.payload) return;
+      for (const listener of listeners) {
+        if (listener.channel === msg.channel && listener.id === msg.payload) listener.onChange();
+      }
     });
     client.on("error", reset);
     client.on("end", () => (state.realtimeClient = null));
     try {
       await client.connect();
-      await client.query(`LISTEN ${CHANNEL}`);
+      for (const channel of CHANNELS) await client.query(`LISTEN ${channel}`);
     } catch (err) {
       reset();
       throw err;
@@ -43,10 +47,16 @@ function connect(): Promise<Client> {
 }
 
 /** Inscreve um ouvinte para mudanças de um quadro. Retorna a função para cancelar. */
-export async function subscribeToBoard(boardId: string, onChange: () => void): Promise<() => void> {
-  const listener: Listener = (id) => {
-    if (id === boardId) onChange();
-  };
+export function subscribeToBoard(boardId: string, onChange: () => void): Promise<() => void> {
+  return subscribe({ channel: "plantao_board", id: boardId, onChange });
+}
+
+/** Inscreve um ouvinte para as notificações de uma pessoa. */
+export function subscribeToUser(userId: string, onChange: () => void): Promise<() => void> {
+  return subscribe({ channel: "plantao_user", id: userId, onChange });
+}
+
+async function subscribe(listener: Listener): Promise<() => void> {
   listeners.add(listener);
   try {
     await connect();

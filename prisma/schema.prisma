@@ -113,20 +113,21 @@ model Team {
   aiBudgetAlertMonth   String?
   createdAt            DateTime @default(now())
 
-  users        User[]
-  boards       Board[]
-  tickets      Ticket[]
-  labels       Label[]
-  agents       Agent[]
-  documents    Document[]
-  integrations Integration[]
-  actions      Action[]
-  jobs         Job[]
-  aiUsage      AiUsage[]
-  executions   ExecutionRequest[]
-  automations  AutomationRule[]
-  reports      Report[]
-  customAgents CustomAgent[]
+  users         User[]
+  boards        Board[]
+  tickets       Ticket[]
+  labels        Label[]
+  agents        Agent[]
+  documents     Document[]
+  integrations  Integration[]
+  actions       Action[]
+  jobs          Job[]
+  aiUsage       AiUsage[]
+  executions    ExecutionRequest[]
+  automations   AutomationRule[]
+  reports       Report[]
+  customAgents  CustomAgent[]
+  notifications Notification[]
 }
 
 model User {
@@ -155,6 +156,10 @@ model User {
   decidedExecutions  ExecutionRequest[] @relation("ExecutionDecider")
   savedFilters       SavedFilter[]
   agentRuns          CustomAgentRun[]
+  comments           CardComment[]
+  attachments        CardAttachment[]
+  notifications      Notification[]     @relation("NotificationRecipient")
+  sentNotifications  Notification[]     @relation("NotificationActor")
 
   @@index([teamId])
 }
@@ -212,15 +217,17 @@ model Card {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  board     Board            @relation(fields: [boardId], references: [id], onDelete: Cascade)
-  column    Column           @relation(fields: [columnId], references: [id])
-  assignee  User?            @relation("CardAssignee", fields: [assigneeId], references: [id])
-  agent     CustomAgent?     @relation(fields: [agentId], references: [id], onDelete: SetNull)
-  ticket    Ticket?          @relation(fields: [ticketId], references: [id])
-  labels    Label[]
-  checklist ChecklistItem[]
-  links     CardLink[]
-  agentRuns CustomAgentRun[]
+  board       Board            @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  column      Column           @relation(fields: [columnId], references: [id])
+  assignee    User?            @relation("CardAssignee", fields: [assigneeId], references: [id])
+  agent       CustomAgent?     @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  ticket      Ticket?          @relation(fields: [ticketId], references: [id])
+  labels      Label[]
+  checklist   ChecklistItem[]
+  links       CardLink[]
+  agentRuns   CustomAgentRun[]
+  comments    CardComment[]
+  attachments CardAttachment[]
 
   @@index([columnId, position])
   @@index([boardId])
@@ -610,4 +617,70 @@ model CustomAgentRun {
 
   @@index([cardId, createdAt])
   @@index([agentId, createdAt])
+}
+
+// Comentário no cartão. Menções ficam no texto como @[Nome](userId) e os ids
+// mencionados são guardados à parte para notificar e filtrar.
+model CardComment {
+  id         String    @id @default(cuid())
+  cardId     String
+  authorId   String
+  content    String
+  mentionIds String[]  @default([])
+  editedAt   DateTime?
+  // Comentários removidos somem da conversa, mas a linha fica para a auditoria.
+  deletedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  card   Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  author User @relation(fields: [authorId], references: [id])
+
+  @@index([cardId, createdAt])
+}
+
+// Arquivo anexado ao cartão, guardado no próprio banco (limite de 4 MB por arquivo).
+model CardAttachment {
+  id          String   @id @default(cuid())
+  cardId      String
+  uploaderId  String
+  filename    String
+  contentType String
+  size        Int
+  data        Bytes
+  createdAt   DateTime @default(now())
+
+  card     Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  uploader User @relation(fields: [uploaderId], references: [id])
+
+  @@index([cardId, createdAt])
+}
+
+enum NotificationType {
+  MENTION // mencionado num comentário
+  COMMENT // comentário em cartão sob sua responsabilidade
+  ASSIGNED // passou a ser responsável pelo cartão
+  TICKET_REPLY // o solicitante respondeu um chamado seu
+}
+
+// Notificação dentro do Plantão, entregue em tempo real (pg_notify 'plantao_user').
+model Notification {
+  id        String           @id @default(cuid())
+  teamId    String
+  userId    String
+  actorId   String?
+  type      NotificationType
+  title     String
+  body      String?
+  href      String
+  cardId    String?
+  ticketId  String?
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  team  Team  @relation(fields: [teamId], references: [id])
+  user  User  @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  actor User? @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([userId, readAt])
 }

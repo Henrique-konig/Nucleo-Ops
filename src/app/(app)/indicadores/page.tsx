@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Info } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { requireUser } from "@/lib/session";
-import { dashboard, TARGETS, type Metrics } from "@/lib/metrics";
+import { dashboard, TARGETS, type Metrics, type WorkloadRow } from "@/lib/metrics";
 import { BarList, DailyColumns, StatTile } from "@/components/metrics/charts";
 
 export const metadata = { title: "Indicadores" };
@@ -93,11 +93,67 @@ export default async function MetricsPage({ searchParams }: PageProps<"/indicado
 
       <DailyColumns title="Chamados por dia" rows={data.perDay} />
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-2">
+        <BarList title="Por status" rows={data.byStatus} />
         <BarList title="Por categoria" rows={data.byCategory} />
-        <BarList title="Por responsável" rows={data.byAssignee} />
+      </div>
+
+      <WorkloadTable rows={data.workload} />
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <BarList title="Abertos no período por responsável" rows={data.byAssignee} />
         <BarList title="Por canal de entrada" rows={data.byChannel} />
       </div>
     </main>
+  );
+}
+
+/** Carga por pessoa: a barra mostra o que está aberto com cada um, relativo ao mais carregado. */
+function WorkloadTable({ rows }: { rows: WorkloadRow[] }) {
+  const top = Math.max(1, ...rows.map((r) => r.open));
+  return (
+    <section aria-labelledby="workload-title" className="space-y-3">
+      <div>
+        <h2 id="workload-title" className="section-title">Carga por pessoa</h2>
+        <p className="page-subtitle">Cartões em aberto agora e chamados resolvidos no período.</p>
+      </div>
+      {rows.length === 0 ? (
+        <p className="empty">Nenhum técnico ativo na equipe.</p>
+      ) : (
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th scope="col">Pessoa</th>
+                <th scope="col" className="w-2/5">Em aberto</th>
+                <th scope="col" className="text-right">Alta/urgente</th>
+                <th scope="col" className="text-right">Atrasados</th>
+                <th scope="col" className="text-right">Resolvidos</th>
+                <th scope="col" className="text-right">Tempo médio</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.userId}>
+                  <th scope="row" className="text-left font-medium">{r.name}</th>
+                  <td>
+                    <span className="flex items-center gap-2">
+                      <span className="h-2 flex-1 rounded-full bg-slate-100 dark:bg-slate-800/70" aria-hidden>
+                        <span className="block h-full rounded-full" style={{ width: `${r.open === 0 ? 0 : Math.max(4, (r.open / top) * 100)}%`, background: "var(--series-1)" }} />
+                      </span>
+                      <span className="w-8 text-right tabular-nums">{r.open}</span>
+                    </span>
+                  </td>
+                  <td className="text-right tabular-nums">{r.urgent}</td>
+                  <td className={`text-right tabular-nums ${r.overdue > 0 ? "font-medium text-red-700 dark:text-red-400" : ""}`}>{r.overdue}</td>
+                  <td className="text-right tabular-nums">{r.resolved}</td>
+                  <td className="text-right whitespace-nowrap tabular-nums">{duration(r.avgResolutionMin)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }

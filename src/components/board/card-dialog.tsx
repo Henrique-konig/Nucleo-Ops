@@ -8,6 +8,7 @@ import * as actions from "@/app/(app)/boards/[boardId]/actions";
 import type { BoardPermissions } from "./board-view";
 import { AgentPanel } from "./agent-panel";
 import { LABEL_COLOR_NAMES, LABEL_COLORS, type AgentOption, type BoardOption, type LabelOption, type MemberOption } from "./shared";
+import { CardCollaboration } from "./card-collaboration";
 
 type Props = {
   card: BoardCard;
@@ -18,6 +19,8 @@ type Props = {
   // Outros quadros da equipe, para mover o cartão.
   boards: BoardOption[];
   permissions: BoardPermissions;
+  currentUserId: string;
+  version: number;
   onClose: () => void;
   onMove: (toColumnId: string) => void;
   onResult: (r: actions.ActionResult<unknown>) => boolean;
@@ -28,7 +31,7 @@ function toDateInput(date: Date | string | null) {
   return date ? new Date(date).toISOString().slice(0, 10) : "";
 }
 
-export function CardDialog({ card, columns, members, labels, agents, boards, permissions, onClose, onMove, onResult }: Props) {
+export function CardDialog({ card, columns, members, labels, agents, boards, permissions, currentUserId, version, onClose, onMove, onResult }: Props) {
   const router = useRouter();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [pending, startTransition] = useTransition();
@@ -142,6 +145,17 @@ export function CardDialog({ card, columns, members, labels, agents, boards, per
         <Checklist card={card} readOnly={readOnly} onResult={onResult} />
 
         <CodeLinks card={card} readOnly={readOnly} onResult={onResult} />
+
+        <CardCollaboration
+          cardId={card.id}
+          currentUserId={currentUserId}
+          members={members}
+          canComment={permissions.comment}
+          canEdit={permissions.editCard}
+          canModerate={permissions.manageColumns}
+          version={version}
+          onResult={onResult}
+        />
 
         <div className="flex flex-wrap items-end justify-between gap-3 border-t border-slate-100 pt-5 dark:border-slate-800">
           {permissions.moveCard && (

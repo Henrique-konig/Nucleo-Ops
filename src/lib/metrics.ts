@@ -135,6 +135,73 @@ export async function breakdowns(teamId: string, period: Period) {
   };
 }
 
+const STATUS_NAMES: Record<string, string> = {
+  OPEN: "Aberto", IN_PROGRESS: "Em andamento", WAITING: "Aguardando solicitante", RESOLVED: "Resolvido", CLOSED: "Encerrado",
+};
+const STATUS_ORDER = Object.keys(STATUS_NAMES);
+
+/** Chamados do período por status atual, na ordem do fluxo. */
+export async function byStatus(teamId: string, period: Period): Promise<Breakdown> {
+  const rows = await db.ticket.groupBy({ by: ["status"], where: queueTickets(teamId, period), _count: true });
+  return rows
+    .sort((a, b) => STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status))
+    .map((r) => ({ label: STATUS_NAMES[r.status] ?? r.status, value: r._count }));
+}
+
+export type WorkloadRow = {
+  userId: string;
+  name: string;
+  open: number; // cartões em aberto agora
+  urgent: number; // dos abertos, chamados de prioridade alta ou urgente
+  overdue: number; // dos abertos, com prazo vencido
+  resolved: number; // chamados resolvidos no período
+  avgResolutionMin: number | null;
+};
+
+/**
+ * Carga por pessoa: o que está com cada um agora e o que resolveu no período.
+ * Cartão sem chamado conta como aberto enquanto não estiver numa coluna de resolvido/encerrado.
+ */
+export async function workload(teamId: string, period: Period): Promise<WorkloadRow[]> {
+  const rows = await db.$queryRaw<{ id: string; name: string; open: bigint; urgent: bigint; overdue: bigint; resolved: bigint; avg_resolution: number | null }[]>`
+    WITH open_cards AS (
+      SELECT c."assigneeId" AS uid, t.priority, c."dueDate"
+      FROM "Card" c
+      JOIN "Board" b ON b.id = c."boardId"
+      JOIN "Column" col ON col.id = c."columnId"
+      LEFT JOIN "Ticket" t ON t.id = c."ticketId"
+      WHERE b."teamId" = ${teamId} AND c."archivedAt" IS NULL AND c."assigneeId" IS NOT NULL
+        AND (
+          (t.id IS NULL AND (col."ticketStatus" IS NULL OR col."ticketStatus" NOT IN ('RESOLVED', 'CLOSED')))
+          OR t.status IN ('OPEN', 'IN_PROGRESS', 'WAITING')
+        )
+    ),
+    resolved AS (
+      SELECT c."assigneeId" AS uid, extract(epoch FROM (t."resolvedAt" - t."createdAt")) / 60 AS minutes
+      FROM "Ticket" t JOIN "Card" c ON c."ticketId" = t.id
+      WHERE t."teamId" = ${teamId} AND t."resolvedAt" >= ${period.from} AND t."resolvedAt" < ${period.to}
+        AND c."assigneeId" IS NOT NULL AND NOT t."resolvedByAgent"
+    )
+    SELECT u.id, u.name,
+      (SELECT count(*) FROM open_cards o WHERE o.uid = u.id) AS open,
+      (SELECT count(*) FROM open_cards o WHERE o.uid = u.id AND o.priority IN ('HIGH', 'URGENT')) AS urgent,
+      (SELECT count(*) FROM open_cards o WHERE o.uid = u.id AND o."dueDate" < now()) AS overdue,
+      (SELECT count(*) FROM resolved r WHERE r.uid = u.id) AS resolved,
+      (SELECT avg(r.minutes) FROM resolved r WHERE r.uid = u.id) AS avg_resolution
+    FROM "User" u
+    WHERE u."teamId" = ${teamId} AND u.active AND u.role IN ('TECHNICIAN', 'COORDINATOR', 'ADMIN')
+    ORDER BY open DESC, u.name ASC`;
+  return rows.map((r) => ({
+    userId: r.id,
+    name: r.name,
+    open: Number(r.open),
+    urgent: Number(r.urgent),
+    overdue: Number(r.overdue),
+    resolved: Number(r.resolved),
+    avgResolutionMin: r.avg_resolution == null ? null : Math.round(Number(r.avg_resolution)),
+  }));
+}
+
 export async function dashboard(actor: Actor, days: number) {
   assertCan(actor.role, "metrics:view");
   // Dias inteiros: de meia-noite (Brasília) de `days − 1` dias atrás até agora.
@@ -142,6 +209,9 @@ export async function dashboard(actor: Actor, days: number) {
   const local = new Date(to.getTime() - BRT_OFFSET);
   const todayStart = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate()) + BRT_OFFSET;
   const period = { from: new Date(todayStart - (days - 1) * 86_400_000), to };
-  const [current, baseline, parts] = await Promise.all([computeMetrics(actor.teamId, period), baselineMetrics(actor.teamId), breakdowns(actor.teamId, period)]);
-  return { period, current, baseline, ...parts };
+  const [current, baseline, parts, statuses, load] = await Promise.all([
+    computeMetrics(actor.teamId, period), baselineMetrics(actor.teamId), breakdowns(actor.teamId, period),
+    byStatus(actor.teamId, period), workload(actor.teamId, period),
+  ]);
+  return { period, current, baseline, ...parts, byStatus: statuses, workload: load };
 }

@@ -3,6 +3,8 @@ import { withSentryConfig } from "@sentry/nextjs/config";
 
 const nextConfig: NextConfig = {
   serverExternalPackages: ["pg", "@prisma/adapter-pg"],
+  // Anexos de até 4 MB passam por server action (o padrão é 1 MB).
+  experimental: { serverActions: { bodySizeLimit: "5mb" } },
 };
 
 // Monitoramento de erros (Sentry). Sem SENTRY_DSN/NEXT_PUBLIC_SENTRY_DSN o SDK fica

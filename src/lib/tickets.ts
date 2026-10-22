@@ -8,6 +8,7 @@ import { enqueue } from "@/lib/jobs/queue";
 import { Prisma } from "@/generated/prisma/client";
 import type { Channel, Priority, TicketStatus } from "@/generated/prisma/enums";
 import { BusinessError, NotFoundError, type Actor } from "@/lib/errors";
+import { notifyUsers } from "@/lib/inbox";
 
 // Chamados: abertura por qualquer canal, conversa com o solicitante e status.
 // Toda mudança gera registro de auditoria e, quando o solicitante precisa saber,
@@ -353,6 +354,11 @@ export async function addRequesterMessage(
       await applyStatus(tx, ticket, "OPEN", actor.id, { moveCard: true, notify: false });
     }
     await enqueue(tx, { teamId: ticket.teamId, type: "ticket.requester_message", payload: { ticketId, messageId: message.id } });
+    const card = await tx.card.findUnique({ where: { ticketId }, select: { assigneeId: true } });
+    await notifyUsers(tx, [card?.assigneeId], {
+      teamId: ticket.teamId, actorId: user?.id ?? null, type: "TICKET_REPLY", title: `Nova mensagem em "${ticket.title}"`,
+      body: text.length > 140 ? `${text.slice(0, 139)}…` : text, href: `/chamados/${ticket.id}`, ticketId: ticket.id,
+    });
     return message;
   });
 }

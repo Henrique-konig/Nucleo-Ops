@@ -6,7 +6,7 @@ type Tx = Prisma.TransactionClient;
 export type AuditEntry = {
   teamId: string;
   type: string;
-  targetType: "card" | "column" | "board" | "ticket" | "checklist_item" | "label" | "user" | "automation" | "document" | "execution" | "draft" | "team" | "report" | "agent" | "integration" | "custom_agent" | "saved_filter";
+  targetType: "card" | "column" | "board" | "ticket" | "checklist_item" | "label" | "user" | "automation" | "document" | "execution" | "draft" | "team" | "report" | "agent" | "integration" | "custom_agent" | "saved_filter" | "comment" | "attachment";
   targetId: string;
   payload?: Prisma.InputJsonValue;
   result?: Prisma.InputJsonValue;

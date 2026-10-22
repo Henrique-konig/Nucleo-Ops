@@ -9,6 +9,7 @@ import { assertCan } from "@/lib/permissions";
 import { getOnCallUserIds } from "@/lib/calendar";
 import { PRIORITY_LABELS } from "@/lib/tickets";
 import { BusinessError, NotFoundError, type Actor } from "@/lib/errors";
+import { notifyAssigned } from "@/lib/inbox";
 import { assertCanRun, loadAgent, recordAgentFailure, recordAgentSuccess } from "./guard";
 import type { Priority } from "@/generated/prisma/enums";
 
@@ -120,5 +121,8 @@ export async function acceptSuggestedAssignee(actor: Actor, ticketId: string) {
       teamId: actor.teamId, userId: actor.id, type: "card.update", targetType: "card", targetId: ticket.card.id,
       payload: { assigneeId: { from: ticket.card.assigneeId, to: ticket.suggestedAssigneeId }, reason: "triage.suggestion" },
     });
+    if (ticket.card.assigneeId !== ticket.suggestedAssigneeId) {
+      await notifyAssigned(tx, ticket.card, ticket.suggestedAssigneeId, actor.teamId, actor.id);
+    }
   });
 }
