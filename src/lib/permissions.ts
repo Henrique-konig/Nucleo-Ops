@@ -11,6 +11,12 @@ export const PERMISSIONS = {
   "card:prioritize": ["COORDINATOR", "ADMIN"],
   "kb:edit": ["TECHNICIAN", "COORDINATOR", "ADMIN"],
   "ai:use": ["TECHNICIAN", "COORDINATOR", "ADMIN"],
+  "execution:propose": ["TECHNICIAN", "COORDINATOR", "ADMIN"],
+  // Ações sensíveis (que afetam produção) exigem também "execution:approve_sensitive".
+  "execution:approve": ["TECHNICIAN", "COORDINATOR", "ADMIN"],
+  "execution:approve_sensitive": ["COORDINATOR", "ADMIN"],
+  "execution:view": ["TECHNICIAN", "COORDINATOR", "ADMIN", "AUDITOR"],
+  "team:manage": ["ADMIN"],
   "column:manage": ["COORDINATOR", "ADMIN"],
   "automation:configure": ["COORDINATOR", "ADMIN"],
   "user:manage": ["ADMIN"],

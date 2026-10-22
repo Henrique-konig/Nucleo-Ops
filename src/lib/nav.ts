@@ -7,6 +7,9 @@ const NAV: { href: string; label: string; permission: Permission; exclude?: Perm
   { href: "/boards", label: "Quadro", permission: "board:view" },
   { href: "/chamados", label: "Chamados", permission: "board:view" },
   { href: "/base", label: "Base de conhecimento", permission: "board:view" },
+  { href: "/execucoes", label: "Execuções", permission: "execution:view" },
+  { href: "/auditoria", label: "Auditoria", permission: "audit:view" },
+  { href: "/admin", label: "Administração", permission: "automation:configure" },
 ];
 
 export function navFor(role: Role) {

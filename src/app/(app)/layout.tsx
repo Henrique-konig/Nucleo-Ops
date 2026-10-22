@@ -21,9 +21,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </ul>
         </nav>
         <div className="flex items-center gap-3 text-sm">
-          <span>
+          <Link href="/conta" className="hover:underline">
             {user.name} <span className="text-slate-500 dark:text-slate-400">· {ROLE_LABELS[user.role]}</span>
-          </span>
+          </Link>
           <form
             action={async () => {
               "use server";

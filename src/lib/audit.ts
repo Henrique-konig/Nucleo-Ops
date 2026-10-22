@@ -11,7 +11,10 @@ export type AuditEntry = {
   payload?: Prisma.InputJsonValue;
   result?: Prisma.InputJsonValue;
   confirmedById?: string;
-} & ({ userId: string; agentId?: never } | { agentId: string; userId?: never });
+  // Exatamente um dos dois (garantido também por CHECK no banco).
+  userId?: string;
+  agentId?: string;
+};
 
 /**
  * Registra uma ação no log de auditoria (RF-08). Deve rodar na mesma transação

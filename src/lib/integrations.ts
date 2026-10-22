@@ -34,6 +34,11 @@ export const integrationSchemas = {
     // Para onde enviar as atualizações dos chamados abertos por este webhook.
     callbackUrl: z.url().optional(),
   }),
+  AUTOMATION: z.object({
+    // Endpoint que executa as ações (recebe POST assinado com X-Plantao-Signature).
+    url: z.url(),
+    secret: z.string().min(16),
+  }),
 } satisfies Record<IntegrationType, z.ZodType>;
 
 export type IntegrationConfig<T extends IntegrationType> = z.infer<(typeof integrationSchemas)[T]>;
