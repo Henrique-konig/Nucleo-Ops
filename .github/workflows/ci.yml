@@ -24,6 +24,8 @@ jobs:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/plantao
       DIRECT_URL: postgresql://postgres:postgres@localhost:5432/plantao
       AUTH_SECRET: ci-secret
+      # Chave de teste (32 bytes em base64), só para o CI.
+      INTEGRATION_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
