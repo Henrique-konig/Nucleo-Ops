@@ -30,13 +30,14 @@ const labels = [
   { name: "Rede", color: "violet" },
   { name: "Urgente", color: "red" },
 ];
-// Triagem, pesquisa e resumo começam ativos (sem chave de API usam o provedor local,
+// Triagem, pesquisa, resumo e chatbot começam ativos (sem chave de API usam o provedor local,
 // sem custo). Execução começa desligada e em simulação.
 const agents: { type: AgentType; active: boolean; dryRun: boolean }[] = [
   { type: "TRIAGE", active: true, dryRun: false },
   { type: "RESEARCH", active: true, dryRun: false },
   { type: "EXECUTION", active: false, dryRun: true },
   { type: "SUMMARY", active: true, dryRun: false },
+  { type: "CHATBOT", active: true, dryRun: false },
 ];
 
 const documents = [
