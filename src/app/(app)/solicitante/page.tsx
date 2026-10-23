@@ -59,8 +59,8 @@ export default async function RequesterPage() {
       </section>
       </div>
 
-      <section aria-labelledby="new-ticket" className="panel h-fit animate-rise p-5 lg:sticky lg:top-8">
-        <h2 id="new-ticket" className="section-title mb-4 flex items-center gap-2"><PlusCircle className="size-4 text-brand-500" aria-hidden /> Abrir chamado</h2>
+      <section id="novo-chamado" aria-labelledby="new-ticket" className="panel h-fit scroll-mt-8 animate-rise p-5 target:ring-2 target:ring-brand-500/40 lg:sticky lg:top-8">
+        <h2 id="new-ticket" className="section-title mb-4 flex items-center gap-2"><PlusCircle className="size-4 text-brand-500" aria-hidden /> Novo chamado</h2>
         <ActionForm action={openTicket} className="space-y-3">
           <label className="block space-y-1.5">
             <span className="field-label">Assunto</span>

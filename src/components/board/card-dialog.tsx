@@ -9,6 +9,7 @@ import type { BoardPermissions } from "./board-view";
 import { AgentPanel } from "./agent-panel";
 import { LABEL_COLOR_NAMES, LABEL_COLORS, type AgentOption, type BoardOption, type LabelOption, type MemberOption } from "./shared";
 import { CardCollaboration } from "./card-collaboration";
+import { DatePicker } from "@/components/ui/date-picker";
 
 type Props = {
   card: BoardCard;
@@ -95,10 +96,10 @@ export function CardDialog({ card, columns, members, labels, agents, boards, per
               <textarea name="description" defaultValue={card.description ?? ""} rows={4} className="input" />
             </label>
             <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block space-y-1">
-                <span className="field-label">Prazo</span>
-                <input name="dueDate" type="date" defaultValue={toDateInput(card.dueDate)} className="input" />
-              </label>
+              <div className="space-y-1">
+                <span aria-hidden className="field-label block">Prazo</span>
+                <DatePicker name="dueDate" label="Prazo" defaultValue={toDateInput(card.dueDate)} />
+              </div>
               <label className="block space-y-1">
                 <span className="field-label">Responsável</span>
                 <select name="assigneeId" defaultValue={card.assignee?.id ?? ""} disabled={!permissions.assign} className="input">

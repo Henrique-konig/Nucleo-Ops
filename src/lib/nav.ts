@@ -26,7 +26,7 @@ const QUICK_ACTIONS: { href: string; label: string; permission: Permission }[] =
   { href: "/boards?novo=1", label: "Criar quadro", permission: "board:manage" },
   { href: "/agentes/novo", label: "Criar agente", permission: "agent:create" },
   { href: "/base/novo", label: "Novo documento", permission: "kb:edit" },
-  { href: "/solicitante", label: "Abrir chamado", permission: "ticket:create" },
+  { href: "/solicitante#novo-chamado", label: "Novo chamado", permission: "ticket:create" },
 ];
 
 export function quickActionsFor(role: Role) {

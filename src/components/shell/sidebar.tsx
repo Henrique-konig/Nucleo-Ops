@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Activity, BarChart3, BookOpen, Bot, ChevronsLeft, Search, FileText, Inbox, KanbanSquare, LogOut, Menu, Monitor, Moon,
-  Settings, ShieldCheck, Sun, Ticket, X, Zap, type LucideIcon,
+  Plus, Settings, ShieldCheck, Sun, Ticket, X, Zap, type LucideIcon,
 } from "lucide-react";
 import type { NavGroup } from "@/lib/nav";
 import { initials } from "@/lib/initials";
@@ -30,6 +30,8 @@ const ICONS: Record<string, LucideIcon> = {
 type Props = {
   items: Item[];
   user: { name: string; role: string };
+  /** Mostra o botão "Novo chamado" no topo do menu. */
+  canOpenTicket?: boolean;
   signOut: () => Promise<void>;
 };
 
@@ -44,7 +46,7 @@ export function Logo({ compact = false }: { compact?: boolean }) {
   );
 }
 
-export function Sidebar({ items, user, signOut }: Props) {
+export function Sidebar({ items, user, canOpenTicket, signOut }: Props) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -84,6 +86,12 @@ export function Sidebar({ items, user, signOut }: Props) {
 
   const nav = (compact: boolean) => (
     <nav aria-label="Principal" className="flex-1 space-y-6 overflow-y-auto px-3 py-2">
+      {canOpenTicket && (
+        <Link href="/solicitante#novo-chamado" title={compact ? "Novo chamado" : undefined} className={`btn-primary w-full ${compact ? "px-0" : ""}`}>
+          <Plus className="size-4" aria-hidden />
+          <span className={compact ? "sr-only" : ""}>Novo chamado</span>
+        </Link>
+      )}
       <SearchButton compact={compact} />
       {Object.entries(groups).map(([group, groupItems]) => (
         <div key={group} className="space-y-1">

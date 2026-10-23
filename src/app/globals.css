@@ -147,9 +147,106 @@ details > summary {
   list-style: none;
 }
 
+/* Caixas de seleção e rádios próprios: mesmo traço dos campos, marca da cor da marca. */
 input[type="checkbox"],
 input[type="radio"] {
-  @apply size-4 cursor-pointer accent-brand-600;
+  @apply grid size-4 shrink-0 cursor-pointer appearance-none place-content-center rounded-[5px] border border-slate-300 bg-white shadow-xs transition hover:border-brand-400 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-950/60 dark:hover:border-brand-400;
+}
+input[type="radio"] {
+  @apply rounded-full;
+}
+input[type="checkbox"]:checked,
+input[type="radio"]:checked {
+  @apply border-brand-600 bg-brand-600 dark:border-brand-500 dark:bg-brand-500;
+}
+input[type="checkbox"]:checked {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 8.5 2.5 2.5L12 5.5'/%3E%3C/svg%3E");
+}
+input[type="radio"]:checked {
+  box-shadow: inset 0 0 0 3px white;
+}
+:root[data-theme="dark"] input[type="radio"]:checked {
+  box-shadow: inset 0 0 0 3px var(--color-slate-900);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) input[type="radio"]:checked {
+    box-shadow: inset 0 0 0 3px var(--color-slate-900);
+  }
+}
+
+/*
+ * Lista do <select> com a cara do app onde o navegador permite (appearance: base-select,
+ * Chrome/Edge 135+). Nos demais fica a lista nativa, já no tema certo pelo color-scheme.
+ */
+:root {
+  --menu-bg: #fff;
+  --menu-border: var(--color-slate-200);
+  --menu-hover: var(--color-slate-100);
+  --menu-active: var(--color-brand-50);
+  --menu-active-text: var(--color-brand-700);
+}
+:root[data-theme="dark"] {
+  --menu-bg: var(--color-slate-900);
+  --menu-border: var(--color-slate-700);
+  --menu-hover: var(--color-slate-800);
+  --menu-active: rgb(34 29 75 / 0.6);
+  --menu-active-text: var(--color-brand-200);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --menu-bg: var(--color-slate-900);
+    --menu-border: var(--color-slate-700);
+    --menu-hover: var(--color-slate-800);
+    --menu-active: rgb(34 29 75 / 0.6);
+    --menu-active-text: var(--color-brand-200);
+  }
+}
+@supports (appearance: base-select) {
+  select.input,
+  select.input::picker(select) {
+    appearance: base-select;
+  }
+  select.input::picker-icon {
+    display: none;
+  }
+  select.input::picker(select) {
+    margin-block: 4px;
+    padding: 4px;
+    min-width: anchor-size(width);
+    max-height: 18rem;
+    border: 1px solid var(--menu-border);
+    border-radius: 0.75rem;
+    background: var(--menu-bg);
+    color: inherit;
+    box-shadow: var(--shadow-lift);
+    opacity: 1;
+    transition: opacity 0.15s, display 0.15s allow-discrete, overlay 0.15s allow-discrete;
+  }
+  select.input:not(:open)::picker(select) {
+    opacity: 0;
+  }
+  @starting-style {
+    select.input:open::picker(select) {
+      opacity: 0;
+    }
+  }
+  select.input option {
+    @apply flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-1.5 text-sm font-normal;
+  }
+  select.input option:hover,
+  select.input option:focus-visible {
+    background: var(--menu-hover);
+    outline: none;
+  }
+  select.input option:checked {
+    background: var(--menu-active);
+    color: var(--menu-active-text);
+    font-weight: 500;
+  }
+  select.input option::checkmark {
+    order: 1;
+    margin-left: auto;
+  }
 }
 
 @layer components {

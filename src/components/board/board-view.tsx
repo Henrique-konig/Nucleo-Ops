@@ -306,7 +306,8 @@ export function BoardView({ board, boards, members, labels, agents, savedFilters
   return (
     <main className="flex h-[calc(100dvh-3.5rem)] flex-col lg:h-dvh">
       <div className="flex flex-wrap items-end justify-between gap-4 px-4 pt-6 pb-5 sm:px-6 lg:px-8 lg:pt-8">
-        <div className="min-w-0 animate-rise">
+        {/* z-30: o menu de troca de quadro passa por cima da barra de filtros. */}
+        <div className="relative z-30 min-w-0 animate-rise">
           <p className="eyebrow">Quadro</p>
           <BoardSwitcher board={board} boards={boards} />
           <p className="page-subtitle">
