@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { FileDown, FileSpreadsheet, Inbox, Search, SlidersHorizontal } from "lucide-react";
+import { FileDown, FileSpreadsheet, Inbox, Plus, Search, SlidersHorizontal } from "lucide-react";
 import { can } from "@/lib/permissions";
 import { EmptyState, PageHeader } from "@/components/ui/page-header";
 import { Pagination, pageHref } from "@/components/ui/pagination";
@@ -29,12 +29,17 @@ export default async function TicketsPage({ searchParams }: PageProps<"/chamados
       <PageHeader
         title="Chamados"
         description={`${total} ${total === 1 ? "chamado encontrado" : "chamados encontrados"}`}
-        actions={can(user.role, "ticket:export") && (
+        actions={
           <>
-            <a className="btn" href={`/api/chamados/exportar?${exportQs("csv")}`}><FileSpreadsheet className="size-4" aria-hidden /> Exportar CSV</a>
-            <a className="btn" href={`/api/chamados/exportar?${exportQs("pdf")}`}><FileDown className="size-4" aria-hidden /> Exportar PDF</a>
+            {can(user.role, "ticket:export") && (
+              <>
+                <a className="btn" href={`/api/chamados/exportar?${exportQs("csv")}`}><FileSpreadsheet className="size-4" aria-hidden /> Exportar CSV</a>
+                <a className="btn" href={`/api/chamados/exportar?${exportQs("pdf")}`}><FileDown className="size-4" aria-hidden /> Exportar PDF</a>
+              </>
+            )}
+            {can(user.role, "ticket:create") && <Link className="btn-primary" href="/solicitante#novo-chamado"><Plus className="size-4" aria-hidden /> Novo chamado</Link>}
           </>
-        )}
+        }
       />
       <form className="panel flex flex-wrap items-end gap-3 p-3" role="search">
         <label className="min-w-56 flex-1 space-y-1">

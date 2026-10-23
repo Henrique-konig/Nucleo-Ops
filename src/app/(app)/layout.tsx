@@ -17,7 +17,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex min-h-screen flex-col lg:flex-row">
       <a href="#conteudo" className="skip-link">Pular para o conteúdo</a>
-      <Sidebar items={navFor(user.role)} user={{ name: user.name, role: ROLE_LABELS[user.role] }} signOut={logout} />
+      <Sidebar items={navFor(user.role)} user={{ name: user.name, role: ROLE_LABELS[user.role] }} canOpenTicket={can(user.role, "ticket:create")} signOut={logout} />
       <div id="conteudo" tabIndex={-1} className="min-w-0 flex-1 animate-fade-in focus:outline-none">{children}</div>
       <CommandPalette pages={[...navFor(user.role).map(({ href, label }) => ({ href, label })), { href: "/conta", label: "Minha conta" }]} actions={quickActionsFor(user.role)} />
       {!user.onboardedAt && (

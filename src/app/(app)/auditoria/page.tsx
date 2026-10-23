@@ -1,5 +1,6 @@
 import { Fragment } from "react";
 import Link from "next/link";
+import { DatePicker } from "@/components/ui/date-picker";
 import { requireUser } from "@/lib/session";
 import { auditFiltersSchema, auditPeople, queryAudit } from "@/lib/audit-log";
 import { actionLabel, TARGET_LABELS } from "@/lib/audit-labels";
@@ -67,14 +68,14 @@ export default async function AuditPage({ searchParams }: PageProps<"/auditoria"
           <span className="block text-xs font-medium text-slate-500 dark:text-slate-400">Id do alvo</span>
           <input name="target" defaultValue={raw.target} className="input w-56 py-1.5" />
         </label>
-        <label className="space-y-1">
-          <span className="block text-xs font-medium text-slate-500 dark:text-slate-400">De</span>
-          <input type="date" name="from" defaultValue={raw.from} className="input py-1.5" />
-        </label>
-        <label className="space-y-1">
-          <span className="block text-xs font-medium text-slate-500 dark:text-slate-400">Até</span>
-          <input type="date" name="to" defaultValue={raw.to} className="input py-1.5" />
-        </label>
+        <div className="w-40 space-y-1">
+          <span aria-hidden className="block text-xs font-medium text-slate-500 dark:text-slate-400">De</span>
+          <DatePicker name="from" label="De" defaultValue={raw.from} className="py-1.5" />
+        </div>
+        <div className="w-40 space-y-1">
+          <span aria-hidden className="block text-xs font-medium text-slate-500 dark:text-slate-400">Até</span>
+          <DatePicker name="to" label="Até" defaultValue={raw.to} className="py-1.5" />
+        </div>
         <button className="btn-primary py-1.5"><SlidersHorizontal className="size-4" aria-hidden /> Filtrar</button>
       </form>
 
