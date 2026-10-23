@@ -31,6 +31,8 @@ export function DatePicker({ name, defaultValue, label, className = "" }: { name
   const focusDay = useRef(false);
   const selected = fromIso(value);
   const id = useId();
+  // O nome acessível repete o texto visível (WCAG 2.5.3).
+  const shown = selected ? selected.toLocaleDateString("pt-BR") : "dd/mm/aaaa";
 
   useEffect(() => {
     const el = pop.current!;
@@ -102,12 +104,12 @@ export function DatePicker({ name, defaultValue, label, className = "" }: { name
         ref={button}
         type="button"
         popoverTarget={id}
-        aria-label={`${label}: ${selected ? selected.toLocaleDateString("pt-BR", { dateStyle: "long" }) : "nenhuma data"}`}
+        aria-label={`${label}: ${shown}`}
         className={`input flex items-center gap-2 text-left ${className}`}
       >
         <CalendarDays className="size-4 shrink-0 text-slate-400" aria-hidden />
         <span className={`flex-1 tabular-nums ${selected ? "" : "text-slate-500 dark:text-slate-400"}`}>
-          {selected ? selected.toLocaleDateString("pt-BR") : "dd/mm/aaaa"}
+          {shown}
         </span>
       </button>
       <div
