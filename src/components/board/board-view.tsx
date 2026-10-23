@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bot, CalendarClock, Check, CheckSquare, ChevronDown, GripVertical, LayoutGrid, Loader2, MoreHorizontal, Plus, Radio, Ticket, X } from "lucide-react";
+import { Bot, CalendarClock, Check, CheckSquare, ChevronDown, GripVertical, LayoutGrid, Loader2, MessageSquare, MoreHorizontal, Paperclip, Plus, Radio, Ticket, X } from "lucide-react";
 import type { BoardCard, BoardData, SavedFilterItem } from "@/lib/boards";
 import * as actions from "@/app/(app)/boards/[boardId]/actions";
 import { CardDialog } from "./card-dialog";
@@ -45,7 +45,7 @@ const CARDS_PER_PAGE = 40;
 function pendingCard(columnId: string, title: string): BoardCard {
   return {
     id: `pending-${crypto.randomUUID()}`, title, columnId, description: null, dueDate: null,
-    assignee: null, labels: [], checklist: [], ticket: null, links: [],
+    assignee: null, agent: null, labels: [], checklist: [], ticket: null, links: [], _count: { comments: 0, attachments: 0 },
   } as unknown as BoardCard;
 }
 
